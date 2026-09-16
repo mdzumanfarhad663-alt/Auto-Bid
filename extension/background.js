@@ -13,7 +13,8 @@
  *    - Negative keyword blacklist
  *    - Budget range & client filters
  *    - Deduplication against processed IDs
- * 5. OpenAI gpt-4o-mini personalized proposal generation (<140 words).
+ * 5. OpenAI (gpt-4o-mini, gpt-4o, etc.) personalized proposal generation strictly adhering to custom markdown rules.
+ *    (Template fallback completely removed)
  * 6. Automated bid submission (or Dry-Run simulation / manual copy & apply).
  * 7. Real-time synchronization with local dashboard at http://localhost:3000.
  */
@@ -32,11 +33,11 @@ const DEFAULT_CONFIG = {
   freelancerOAuthToken: '', // Optional! Left blank for public feed
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
-  mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry'],
+  mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry', 'Web Development', 'Full Stack Development'],
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
-  minBudget: 20,
-  maxBudget: 3500,
-  allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR'],
+  minBudget: 15,
+  maxBudget: 5000,
+  allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
   requirePaymentVerified: false, // Default false so public feed projects aren't rejected
   minClientRating: 4.0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
@@ -44,7 +45,7 @@ const DEFAULT_CONFIG = {
   ctaQuestion: '',
   systemPrompt: `OUTPUT FORMAT (follow exactly):
 
-Line 1: "Hi,"
+Line 1: "Hi"
 [blank line]
 Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
 [blank line]
@@ -52,14 +53,13 @@ Paragraph 2 (2–3 sentences): Proof. Mention a similar project I've done using 
 [blank line]
 Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job in simple steps written as a sentence.
 [blank line]
-Last line: {cta_question}
+Let's discuss in chat.
 
 HARD RULES:
-- The first line must ALWAYS be exactly "Hi," alone. Do NOT write any client name, username, or client title after "Hi,".
+- The first word of the proposal must always be "Hi". No exceptions.
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
-- CRITICAL LAST LINE RULE: The last line MUST be a single, intelligent technical question directly relevant to their specific project requirements (e.g. asking about their existing codebase, API version, design files, or specific architectural challenge). NEVER ask generic questions like "Are you available for a quick call?", "When can we start?", or "Are you available for a 5-minute review call?".
 - Write like a real person typing a message: short sentences, simple English, confident tone.
 - Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
 - Do not repeat the job post back word for word.
@@ -77,9 +77,6 @@ let activeConfig = { ...DEFAULT_CONFIG };
 let processedIds = new Set();
 let isPolling = false;
 const notificationUrls = new Map();
-
-// Global map of pending bids by tabId or URL
-const pendingBidsMap = new Map();
 
 // Initialize service worker
 chrome.runtime.onInstalled.addListener(async () => {
@@ -168,7 +165,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function loadStoredConfig() {
-  const data = await chrome.storage.local.get(['config', 'processedIds']);
+  const data = await chrome.storage.local.get(['config', 'processedIds', 'openaiApiKey']);
   if (data.config) {
     activeConfig = { ...DEFAULT_CONFIG, ...data.config };
   } else {
@@ -185,16 +182,12 @@ async function loadStoredConfig() {
     }
   }
 
-  if (activeConfig.autoOpenQualified === undefined) {
-    activeConfig.autoOpenQualified = true;
+  if (data.openaiApiKey && !activeConfig.openaiApiKey) {
+    activeConfig.openaiApiKey = data.openaiApiKey;
   }
 
-  if (
-    activeConfig.ctaQuestion &&
-    (activeConfig.ctaQuestion.includes('5-minute technical review') ||
-     activeConfig.ctaQuestion.includes('Are you available for a quick'))
-  ) {
-    activeConfig.ctaQuestion = '';
+  if (activeConfig.autoOpenQualified === undefined) {
+    activeConfig.autoOpenQualified = true;
   }
 
   if (Array.isArray(data.processedIds)) {
@@ -260,12 +253,22 @@ async function runPollingCycle() {
       project.bidAmount = bidAmount;
       project.bidPeriodDays = activeConfig.defaultDeliveryDays;
 
-      // Generate AI Proposal with gpt-4o-mini
-      const proposal = await generateAiProposal(project, activeConfig);
-      project.generatedProposal = proposal;
+      // Generate AI Proposal with OpenAI according to user custom markdown prompt rules
+      let proposal = '';
+      try {
+        proposal = await generateAiProposal(project, activeConfig);
+        project.generatedProposal = proposal;
+      } catch (genError) {
+        console.error('[FreelancerAutoBid] Proposal generation failed:', genError.message);
+        project.skipReason = `OpenAI Error: ${genError.message}`;
+        project.status = 'FAILED';
+        await recordProjectResult(project);
+        processedIds.add(project.id);
+        continue;
+      }
 
       // Submit Bid or Simulate / Dry-Run
-      if (activeConfig.autoBidEnabled) {
+      if (activeConfig.autoBidEnabled && proposal) {
         // Cache pending proposal and bid data to extension storage
         await chrome.storage.local.set({
           pendingAutoBid: {
@@ -565,7 +568,7 @@ function evaluateQualification(project, config) {
     return { qualified: false, reason: `Budget exceeds ceiling ($${project.budget.minimum} > $${config.maxBudget})` };
   }
 
-  if (config.allowedCurrencies.length > 0 && !config.allowedCurrencies.includes(project.budget.currency)) {
+  if (config.allowedCurrencies.length > 0 && !config.allowedCurrencies.includes('ALL') && !config.allowedCurrencies.includes(project.budget.currency)) {
     return { qualified: false, reason: `Currency not permitted (${project.budget.currency})` };
   }
 
@@ -581,71 +584,98 @@ function evaluateQualification(project, config) {
 }
 
 /**
- * OpenAI gpt-4o-mini Bid Proposal Generator
+ * OpenAI Proposal Generator strictly adhering to the user's custom markdown rules.
+ * No template fallback.
  */
 async function generateAiProposal(project, config) {
-  const apiKey = config.openaiApiKey;
-  const skillsList = config.freelancerSkills.join(', ');
-  const portfolioList = config.portfolioLinks.slice(0, 2).join(' | ');
+  let apiKey = config.openaiApiKey;
+  if (!apiKey || apiKey.trim() === '') {
+    const st = await chrome.storage.local.get(['openaiApiKey', 'config']);
+    apiKey = st.openaiApiKey || st.config?.openaiApiKey;
+  }
 
-  const systemInstruction = config.systemPrompt
-    .replace('{skills}', skillsList)
-    .replace('{portfolio_links}', portfolioList)
-    .replace('{cta_question}', config.ctaQuestion);
+  // Also try local dashboard if key is not yet set in extension storage
+  if (!apiKey || apiKey.trim() === '') {
+    try {
+      const res = await fetch(`${LOCAL_DASHBOARD_URL}/api/config`);
+      if (res.ok) {
+        const remoteConfig = await res.json();
+        if (remoteConfig.openaiApiKey) {
+          apiKey = remoteConfig.openaiApiKey;
+          activeConfig.openaiApiKey = apiKey;
+          await chrome.storage.local.set({ openaiApiKey: apiKey });
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!apiKey || apiKey.trim() === '' || apiKey.startsWith('your_openai')) {
+    showProjectNotification(
+      project.id,
+      '⚠️ OpenAI API Key Required',
+      'Please enter your OpenAI API Key in the extension popup or dashboard to generate proposals according to your markdown rules.',
+      'http://localhost:3000'
+    );
+    throw new Error('OpenAI API Key is required. Please configure your OpenAI API Key.');
+  }
+
+  const skillsList = (config.freelancerSkills || []).join(', ');
+  const portfolioList = (config.portfolioLinks || []).slice(0, 2).join(' | ');
+
+  let systemInstruction = config.systemPrompt || DEFAULT_CONFIG.systemPrompt;
+  systemInstruction = systemInstruction
+    .replace(/\{skills\}/g, skillsList)
+    .replace(/\{portfolio_links\}/g, portfolioList);
+
+  if (systemInstruction.includes('{cta_question}')) {
+    systemInstruction = systemInstruction.replace(
+      /\{cta_question\}/g,
+      config.ctaQuestion && config.ctaQuestion.trim() !== '' ? config.ctaQuestion : "Let's discuss in chat."
+    );
+  }
 
   const userPrompt = `Project Title: ${project.title}
 Budget: ${project.budget.minimum} - ${project.budget.maximum} ${project.budget.currency}
-Required Skills: ${project.jobs.map((j) => j.name).join(', ')}
-Description:
+Required Skills: ${(project.jobs || []).map((j) => j.name).join(', ')}
+
+Job Description:
+"""
 ${project.description}
+"""
 
-Write a winning proposal under 140 words:`;
+Generate the proposal now following the markdown rules strictly:`;
 
-  if (apiKey) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: config.openaiModel || 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemInstruction },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.65,
-          max_tokens: 300,
-        }),
-      });
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey.trim()}`,
+    },
+    body: JSON.stringify({
+      model: config.openaiModel || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.65,
+      max_tokens: 400,
+    }),
+  });
 
-      if (response.ok) {
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content?.trim() || '';
-      }
-    } catch (e) {
-      console.warn('[FreelancerAutoBid] Direct OpenAI call failed, falling back to local dashboard proxy:', e);
-    }
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(`OpenAI API error (${response.status}): ${errData.error?.message || response.statusText}`);
   }
 
-  // Fallback: Proxy to local server or fallback template
-  try {
-    const proxyRes = await fetch(`${LOCAL_DASHBOARD_URL}/api/generate-bid`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project }),
-    });
-    if (proxyRes.ok) {
-      const proxyData = await proxyRes.json();
-      return proxyData.proposal;
-    }
-  } catch (err) {
-    console.warn('[FreelancerAutoBid] Local server proxy unavailable:', err);
+  const data = await response.json();
+  const rawProposal = data.choices?.[0]?.message?.content?.trim() || '';
+  const cleaned = rawProposal.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  if (!cleaned) {
+    throw new Error('OpenAI returned an empty response.');
   }
 
-  // Standard Deterministic Fallback
-  return `Hi, I reviewed your requirements for "${project.title}". With deep production expertise in ${skillsList.split(',').slice(0, 3).join(', ')}, I can deliver this cleanly and reliably within your timeline. Portfolio proof: ${portfolioList}. ${config.ctaQuestion}`;
+  return cleaned;
 }
 
 /**

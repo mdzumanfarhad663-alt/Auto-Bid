@@ -28,7 +28,11 @@
     input:checked + .slider { background-color: #0ea5e9; }
     input:checked + .slider:before { transform: translateX(18px); }
 
-    .select-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 3px 6px; font-size: 11px; outline: none; }
+    .select-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none; }
+    .text-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 6px 8px; font-size: 11px; outline: none; width: 100%; }
+
+    .api-card { background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 8px; }
+    .api-card label { font-size: 11px; font-weight: 600; color: #94a3b8; display: block; margin-bottom: 4px; }
 
     .btn-group { display: flex; gap: 8px; margin-top: 12px; }
     .btn { flex: 1; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 12px; text-align: center; text-decoration: none; transition: background .15s; }
@@ -61,6 +65,16 @@
       <div class="stat-label">Proposals Ready</div>
       <div id="bidsCount" class="stat-value" style="color: #34d399;">0</div>
     </div>
+  </div>
+
+  <!-- OpenAI API Key settings inside popup -->
+  <div class="api-card">
+    <label for="openaiKeyInput">🔑 OpenAI API Key (Required for AI Proposals)</label>
+    <div style="display: flex; gap: 6px;">
+      <input type="password" id="openaiKeyInput" class="text-input" placeholder="sk-proj-..." />
+      <button id="saveKeyBtn" class="btn btn-secondary" style="flex: 0 0 60px; padding: 4px 8px; font-size: 11px;">Save</button>
+    </div>
+    <div id="keyStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Strict Markdown Rules Active</div>
   </div>
 
   <div class="toggle-row" style="background: #1e1b4b; border-color: #4f46e5;">

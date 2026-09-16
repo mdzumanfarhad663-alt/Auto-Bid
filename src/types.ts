@@ -100,7 +100,7 @@ export const DEFAULT_CONFIG: FilterConfig = {
   ctaQuestion: '',
   systemPrompt: `OUTPUT FORMAT (follow exactly):
 
-Line 1: "Hi,"
+Line 1: "Hi"
 [blank line]
 Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
 [blank line]
@@ -108,14 +108,13 @@ Paragraph 2 (2–3 sentences): Proof. Mention a similar project I've done using 
 [blank line]
 Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job in simple steps written as a sentence.
 [blank line]
-Last line: {cta_question}
+Let's discuss in chat.
 
 HARD RULES:
-- The first line must ALWAYS be exactly "Hi," alone. Do NOT add any client name, username, or client title after "Hi,".
+- The first word of the proposal must always be "Hi". No exceptions.
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
-- CRITICAL LAST LINE RULE: The last line MUST be a single, intelligent technical question directly relevant to their specific project requirements (e.g. asking about their existing codebase, API version, design files, or specific architectural challenge). NEVER ask generic questions like "Are you available for a quick call?", "When can we start?", or "Are you available for a 5-minute review call?".
 - Write like a real person typing a message: short sentences, simple English, confident tone.
 - Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
 - Do not repeat the job post back word for word.

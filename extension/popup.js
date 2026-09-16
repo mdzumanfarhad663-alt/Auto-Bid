@@ -14,14 +14,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   const scannedCount = document.getElementById('scannedCount');
   const bidsCount = document.getElementById('bidsCount');
   const pollNowBtn = document.getElementById('pollNowBtn');
+  const openaiKeyInput = document.getElementById('openaiKeyInput');
+  const saveKeyBtn = document.getElementById('saveKeyBtn');
+  const keyStatus = document.getElementById('keyStatus');
 
   // Load status from background service worker & storage
-  chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'autoOpenQualified'], (localData) => {
+  chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'autoOpenQualified', 'openaiApiKey', 'config'], (localData) => {
     if (handsFreeToggle) handsFreeToggle.checked = localData.handsFreeAutoSubmit !== false;
     if (delaySelect && localData.autoSubmitDelaySeconds !== undefined) {
       delaySelect.value = localData.autoSubmitDelaySeconds.toString();
     }
     if (autoOpenToggle) autoOpenToggle.checked = !!localData.autoOpenQualified;
+    
+    const key = localData.openaiApiKey || localData.config?.openaiApiKey || '';
+    if (openaiKeyInput && key) {
+      openaiKeyInput.value = key;
+      if (keyStatus) {
+        keyStatus.textContent = '✓ OpenAI API Key configured';
+        keyStatus.style.color = '#34d399';
+      }
+    }
   });
 
   chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (response) => {
@@ -42,18 +54,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (intervalSelect && cfg.pollIntervalSeconds) {
         intervalSelect.value = cfg.pollIntervalSeconds >= 60 ? '60' : '30';
       }
+      if (openaiKeyInput && cfg.openaiApiKey && !openaiKeyInput.value) {
+        openaiKeyInput.value = cfg.openaiApiKey;
+        if (keyStatus) {
+          keyStatus.textContent = '✓ OpenAI API Key configured';
+          keyStatus.style.color = '#34d399';
+        }
+      }
       updateStatusBadge(cfg.autoBidEnabled);
       scannedCount.textContent = response.processedCount || 0;
     }
   });
 
-  // Try to query local dashboard for up-to-date stats
+  // Try to query local dashboard for up-to-date stats and sync key
   try {
     const res = await fetch('http://localhost:3000/api/stats');
     if (res.ok) {
       const stats = await res.json();
       scannedCount.textContent = stats.totalScanned || 0;
       bidsCount.textContent = stats.totalBidsPlaced || 0;
+    }
+
+    const cfgRes = await fetch('http://localhost:3000/api/config');
+    if (cfgRes.ok) {
+      const remoteConfig = await cfgRes.json();
+      if (remoteConfig.openaiApiKey && (!openaiKeyInput.value || openaiKeyInput.value === '')) {
+        openaiKeyInput.value = remoteConfig.openaiApiKey;
+        if (keyStatus) {
+          keyStatus.textContent = '✓ OpenAI API Key loaded from Dashboard';
+          keyStatus.style.color = '#34d399';
+        }
+      }
     }
   } catch (e) {
     // Local dashboard not responding
@@ -67,6 +98,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       statusBadge.textContent = 'PAUSED';
       statusBadge.className = 'status-badge status-paused';
     }
+  }
+
+  if (saveKeyBtn) {
+    saveKeyBtn.addEventListener('click', () => {
+      const key = openaiKeyInput.value.trim();
+      chrome.storage.local.set({ openaiApiKey: key });
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONFIG',
+        config: { openaiApiKey: key },
+      });
+      if (keyStatus) {
+        keyStatus.textContent = key ? '✓ OpenAI API Key saved!' : '⚠️ Key is empty';
+        keyStatus.style.color = key ? '#34d399' : '#fbbf24';
+      }
+    });
   }
 
   autoBidToggle.addEventListener('change', () => {
