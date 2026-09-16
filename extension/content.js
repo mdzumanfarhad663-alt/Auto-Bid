@@ -1,23 +1,37 @@
 /**
  * Freelancer AutoBid - Content Script (Runs on https://www.freelancer.com/*)
  * 
- * Automatically detects AutoBid data passed from Dashboard, finds Freelancer's bid fields,
- * autofills:
+ * Automatically detects AutoBid data passed from Dashboard or Background, finds Freelancer's bid fields,
+ * and autofills:
  *  1. Proposal Description
  *  2. Bid Amount
  *  3. Delivery Days
- * and triggers Angular/React reactive form events.
+ * and triggers complete reactive form events + auto-submits if enabled.
  */
 
 (function () {
   'use strict';
 
-  console.log('[AutoBid] Freelancer AutoBid Content Script loaded on', window.location.href);
+  // Capture hash immediately at document_start before Angular/SPA router strips it
+  let capturedHash = window.location.hash || '';
+  if (capturedHash && (capturedHash.includes('autobid') || capturedHash.includes('amount') || capturedHash.includes('period') || capturedHash.includes('pid'))) {
+    try {
+      sessionStorage.setItem('__freelancer_autobid_hash__', capturedHash);
+    } catch (e) {}
+  } else {
+    try {
+      capturedHash = sessionStorage.getItem('__freelancer_autobid_hash__') || '';
+    } catch (e) {}
+  }
 
-  // Check URL hash for Autobid payload
+  console.log('[AutoBid] Freelancer AutoBid Content Script initialized. Hash snapshot:', capturedHash ? 'Captured' : 'None');
+
+  // Parse Autobid payload from captured hash or current URL
   function parseAutoBidFromUrl() {
-    const hash = window.location.hash;
-    if (!hash || (!hash.includes('autobid') && !hash.includes('amount') && !hash.includes('period') && !hash.includes('proposal'))) return null;
+    const hash = window.location.hash || capturedHash || '';
+    if (!hash || (!hash.includes('autobid') && !hash.includes('amount') && !hash.includes('period') && !hash.includes('proposal') && !hash.includes('autobid_p'))) {
+      return null;
+    }
 
     try {
       const cleanHash = hash.replace(/^#/, '');
@@ -50,88 +64,86 @@
     return null;
   }
 
-  // Also check chrome.storage.local for pending bid if hash is empty
+  // Retrieve pending bid data from URL hash or chrome.storage.local
   async function getPendingBidData() {
     const urlData = parseAutoBidFromUrl();
-    if (urlData) return urlData;
+    if (urlData && (urlData.proposal || urlData.amount)) return urlData;
 
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         const stored = await chrome.storage.local.get(['pendingAutoBid', 'handsFreeAutoSubmit', 'autoSubmitDelaySeconds']);
         if (stored && stored.pendingAutoBid) {
           const pb = stored.pendingAutoBid;
-          // Only use if recent (within 5 minutes) and matches current project URL or ID
           if (Date.now() - (pb.timestamp || 0) < 5 * 60 * 1000) {
-            chrome.storage.local.remove('pendingAutoBid');
             return {
               ...pb,
-              autoSubmit: stored.handsFreeAutoSubmit || pb.autoSubmit,
+              autoSubmit: stored.handsFreeAutoSubmit !== undefined ? stored.handsFreeAutoSubmit : pb.autoSubmit,
             };
           }
         }
       }
-    } catch (e) {
-      // Storage might not be accessible
-    }
+    } catch (e) {}
 
     return null;
   }
 
-  // Set input value and dispatch all relevant synthetic events for Angular / React / native forms
-  function setNativeValue(element, value) {
-    if (!element || value == null) return false;
+  // Helper to query element piercing shadow DOM
+  function queryDeep(selector, root = document) {
+    let el = root.querySelector(selector);
+    if (el) return el;
 
-    try {
-      element.focus();
-    } catch (e) {}
-
-    // React 16+ / Angular value setter workaround
-    const prototype = Object.getPrototypeOf(element);
-    const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-
-    if (nativeSetter) {
-      nativeSetter.call(element, value);
-    } else {
-      element.value = value;
+    // Search shadow roots
+    const all = root.querySelectorAll('*');
+    for (const node of all) {
+      if (node.shadowRoot) {
+        const found = queryDeep(selector, node.shadowRoot);
+        if (found) return found;
+      }
     }
-
-    try {
-      element.dispatchEvent(new Event('focus', { bubbles: true }));
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
-      element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
-      element.dispatchEvent(new Event('blur', { bubbles: true }));
-    } catch (e) {}
-    return true;
+    return null;
   }
 
   // Selectors for Freelancer.com bid elements
   const SELECTORS = {
+    openBidFormButton: [
+      'button[data-qa="bid-button"]',
+      'button[data-qa="place-bid-open"]',
+      'fl-button[text*="Bid on" i] button',
+      'button.ProjectView-bid-btn',
+      'button:not([disabled])',
+    ],
     description: [
       'textarea[formcontrolname="description"]',
       'textarea#description',
       'textarea[name="descr"]',
+      'textarea[name="description"]',
       'textarea[data-qa="bid-description"]',
       'textarea[data-qa="bid-description-input"]',
-      'textarea[name="description"]',
-      'app-project-view-bid-form textarea',
       'fl-textarea[formcontrolname="description"] textarea',
       'fl-textarea textarea',
+      'app-project-view-bid-form textarea',
+      'app-bid-form textarea',
+      'textarea.BidForm-textarea',
       'textarea[placeholder*="proposal" i]',
       'textarea[placeholder*="details" i]',
-      '.BidForm-textarea',
+      'textarea[placeholder*="bid" i]',
       'textarea',
     ],
     amount: [
       'input[formcontrolname="bidAmount"]',
       'input#bidAmount',
       'input[name="sum"]',
+      'input[name="bidAmount"]',
       'input[data-qa="bid-amount"]',
       'input[data-qa="bid-amount-input"]',
       'input#floating-bid-amount',
       'fl-input[formcontrolname="bidAmount"] input',
+      'fl-input input[type="number"]',
+      'app-project-view-bid-form input[type="number"]',
+      'app-bid-form input[type="number"]',
       'input[placeholder*="amount" i]',
+      'input[placeholder*="price" i]',
+      'input[placeholder*="bid" i]',
       'input[type="number"]',
     ],
     period: [
@@ -141,15 +153,18 @@
       'input[data-qa="bid-period"]',
       'input[data-qa="bid-period-input"]',
       'fl-input[formcontrolname="period"] input',
-      'input[placeholder*="days" i]',
       'input[name="delivery_period"]',
+      'input[placeholder*="days" i]',
+      'input[placeholder*="period" i]',
     ],
     placeBidButton: [
       'button[data-qa="place-bid-btn"]',
       'button[data-qa="place-bid-button"]',
       'button[data-qa="bid-submit-btn"]',
       'app-project-view-bid-form button[type="submit"]',
+      'app-bid-form button[type="submit"]',
       'fl-button[text*="Place Bid" i] button',
+      'fl-button[text*="Place Bid" i]',
       'button.BidForm-submit',
       'form[name="bidForm"] button[type="submit"]',
       '#place-bid-btn',
@@ -158,14 +173,14 @@
 
   function findElement(selectorList) {
     for (const sel of selectorList) {
-      const el = document.querySelector(sel);
+      const el = queryDeep(sel);
       if (el && el.offsetParent !== null) {
         return el;
       }
     }
-    // Try relaxed search if visible
+    // Fallback: search without visibility constraint
     for (const sel of selectorList) {
-      const el = document.querySelector(sel);
+      const el = queryDeep(sel);
       if (el) return el;
     }
     return null;
@@ -188,19 +203,66 @@
     return null;
   }
 
+  // Set input value and dispatch all relevant synthetic events for Angular / React / native forms
+  function setNativeValue(element, value) {
+    if (!element || value == null) return false;
+
+    try {
+      element.focus();
+    } catch (e) {}
+
+    // React / Angular value setter workaround
+    const prototype = Object.getPrototypeOf(element);
+    const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(element, value);
+    } else {
+      element.value = value;
+    }
+
+    try {
+      element.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      try {
+        element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: String(value) }));
+      } catch (ie) {}
+      element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+      element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+      element.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+    } catch (e) {}
+    return true;
+  }
+
+  // Open the bid form if it's currently collapsed/hidden behind a "Bid on this Project" button
+  function maybeOpenBidForm() {
+    const desc = findElement(SELECTORS.description);
+    if (!desc || desc.offsetParent === null) {
+      const allButtons = Array.from(document.querySelectorAll('button, a'));
+      for (const b of allButtons) {
+        const text = (b.textContent || '').trim().toLowerCase();
+        if (text.includes('bid on this project') || text === 'place a bid' || text === 'bid now') {
+          console.log('[AutoBid] Clicking open bid form button:', b);
+          b.click();
+          break;
+        }
+      }
+    }
+  }
+
   // Inject sleek notification badge into Freelancer page & execute auto-submit if enabled
   async function showAutoBidNotification(data) {
     const existing = document.getElementById('freelancer-autobid-floating-banner');
     if (existing) existing.remove();
 
-    // Check extension storage for handsFreeAutoSubmit setting as well
-    let isAutoSubmit = data.autoSubmit;
+    let isAutoSubmit = data.autoSubmit !== false;
     let delaySeconds = 2;
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         const st = await chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds']);
         if (st.handsFreeAutoSubmit !== undefined) {
-          isAutoSubmit = isAutoSubmit || st.handsFreeAutoSubmit;
+          isAutoSubmit = st.handsFreeAutoSubmit;
         }
         if (st.autoSubmitDelaySeconds) {
           delaySeconds = Math.max(0, parseInt(st.autoSubmitDelaySeconds, 10));
@@ -214,13 +276,13 @@
       position: fixed;
       bottom: 24px;
       right: 24px;
-      z-index: 999999;
+      z-index: 99999999;
       background: #0f172a;
       color: #f8fafc;
       border: 1px solid ${isAutoSubmit ? '#38bdf8' : '#10b981'};
       border-radius: 12px;
       padding: 16px 20px;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 13px;
       max-width: 380px;
@@ -246,7 +308,7 @@
       <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;">
         ${data.amount ? `<div>• Bid Amount: <strong style="color: #38bdf8;">$${data.amount}</strong></div>` : ''}
         ${data.period ? `<div>• Delivery: <strong style="color: #38bdf8;">${data.period} days</strong></div>` : ''}
-        <div>• AI Proposal: <strong style="color: #34d399;">Autofilled into form!</strong></div>
+        <div>• Proposal: <strong style="color: #34d399;">Autofilled into form!</strong></div>
       </div>
 
       ${isAutoSubmit ? `
@@ -254,7 +316,7 @@
           <div style="font-size: 12px; color: #38bdf8; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
             <span>🤖 Placing bid automatically in <span id="autobid-countdown" style="font-size: 14px; font-weight: 700; color: #f8fafc;">${delaySeconds}</span>s...</span>
           </div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Hands-Free Mode: Clicking 'Place Bid' without human touch.</div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Hands-Free: Clicking 'Place Bid' without human touch.</div>
         </div>
         <div style="display: flex; gap: 8px;">
           <button id="autobid-cancel-submit-btn" style="flex: 1; background: #dc2626; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
@@ -266,7 +328,7 @@
         </div>
       ` : `
         <div style="display: flex; gap: 8px;">
-          <button id="autobid-scroll-btn" style="flex: 1; background: #059669; hover: #047857; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          <button id="autobid-scroll-btn" style="flex: 1; background: #059669; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
             Review &amp; Place Bid
           </button>
         </div>
@@ -299,6 +361,12 @@
         if (placeBidBtn) {
           console.log('[AutoBid] Triggering click on Freelancer Place Bid button!', placeBidBtn);
           placeBidBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Dispatch mouse events + click
+          try {
+            placeBidBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            placeBidBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+          } catch (e) {}
           placeBidBtn.click();
 
           const countdownBox = document.getElementById('autobid-countdown-box');
@@ -370,15 +438,23 @@
     }, isAutoSubmit ? 16000 : 12000);
   }
 
-  // Attempt to autofill fields
+  // Attempt to autofill fields repeatedly until elements are rendered
+  let autofillRunning = false;
   async function attemptAutofill(bidData) {
+    if (!bidData) return;
+    if (autofillRunning) return;
+    autofillRunning = true;
+
     let filledDescription = false;
     let filledAmount = false;
     let filledPeriod = false;
 
-    // Try finding fields over a window of 10 seconds (in case Freelancer takes time to render)
+    console.log('[AutoBid] Starting autofill poll for:', { amount: bidData.amount, period: bidData.period });
+
     const startTime = Date.now();
     const interval = setInterval(() => {
+      maybeOpenBidForm();
+
       const descEl = findElement(SELECTORS.description);
       const amountEl = findElement(SELECTORS.amount);
       const periodEl = findElement(SELECTORS.period);
@@ -388,64 +464,69 @@
         descEl.style.outline = '2px solid #10b981';
         descEl.style.transition = 'outline 0.3s';
         filledDescription = true;
+        console.log('[AutoBid] Filled description textarea!');
       }
 
       if (amountEl && !filledAmount && bidData.amount) {
         setNativeValue(amountEl, bidData.amount);
         amountEl.style.outline = '2px solid #10b981';
         filledAmount = true;
+        console.log('[AutoBid] Filled amount input!');
       }
 
       if (periodEl && !filledPeriod && bidData.period) {
         setNativeValue(periodEl, bidData.period);
         periodEl.style.outline = '2px solid #10b981';
         filledPeriod = true;
+        console.log('[AutoBid] Filled delivery period input!');
       }
 
-      // If at least description was filled, or 12 seconds passed, finish
-      if (filledDescription || (Date.now() - startTime > 12000)) {
+      // If at least description was filled, or 18 seconds passed, finish
+      if ((filledDescription && (filledAmount || !bidData.amount)) || (Date.now() - startTime > 18000)) {
         clearInterval(interval);
+        autofillRunning = false;
         if (filledDescription || filledAmount || filledPeriod) {
           console.log('[AutoBid] Successfully filled Freelancer bid form!');
           showAutoBidNotification(bidData);
 
-          // Clean hash from URL for clean appearance
-          if (window.location.hash && (window.location.hash.includes('autobid') || window.location.hash.includes('amount') || window.location.hash.includes('period'))) {
-            try {
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            } catch (e) {}
-          }
+          // Clear cached hash
+          try {
+            sessionStorage.removeItem('__freelancer_autobid_hash__');
+          } catch (e) {}
         }
       }
-    }, 350);
+    }, 300);
   }
 
   // Initialize flow
   async function init() {
     const bidData = await getPendingBidData();
     if (bidData) {
-      console.log('[AutoBid] Pending bid data detected:', { amount: bidData.amount, period: bidData.period });
+      console.log('[AutoBid] Pending bid data found, executing autofill...');
       attemptAutofill(bidData);
     }
   }
 
-  // Listen for messages from background script or popup
+  // Listen for messages from background script or dashboard
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.type === 'AUTOFILL_BID') {
+        console.log('[AutoBid] Received AUTOFILL_BID message from background:', request.data);
         attemptAutofill(request.data);
         sendResponse({ success: true });
       }
     });
   }
 
+  // Run on load and whenever DOM elements change
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
 
-  // React to single-page navigation and direct hash modifications
+  // Also trigger on window load & mutation
+  window.addEventListener('load', init);
   window.addEventListener('hashchange', init);
   window.addEventListener('popstate', init);
 })();

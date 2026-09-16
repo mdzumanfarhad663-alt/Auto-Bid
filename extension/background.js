@@ -42,13 +42,29 @@ const DEFAULT_CONFIG = {
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
   ctaQuestion: '',
-  systemPrompt: `You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.
-RULES:
-1. Strict limit: UNDER 140 WORDS.
-2. Directly identify and address the client's exact problem in sentence #1. No generic greetings.
-3. Reference relevant skills: {skills}.
-4. Provide portfolio proof: {portfolio_links}.
-5. CRITICAL LAST LINE: The very last line MUST be a single, intelligent technical question directly based on their specific project requirements (e.g., asking about their API version, existing codebase, theme, or design files). NEVER ask generic questions like "Are you available for a quick call?" or "When can we start?".`,
+  systemPrompt: `OUTPUT FORMAT (follow exactly):
+
+Line 1: "Hi,"
+[blank line]
+Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
+[blank line]
+Paragraph 2 (2–3 sentences): Proof. Mention a similar project I've done using {skills}, with one specific result or detail. Keep it believable and concrete.
+[blank line]
+Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job in simple steps written as a sentence.
+[blank line]
+Last line: {cta_question}
+
+HARD RULES:
+- The first line must ALWAYS be exactly "Hi," alone. Do NOT write any client name, username, or client title after "Hi,".
+- Put exactly one blank line between every section.
+- Total length under 140 words.
+- Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
+- CRITICAL LAST LINE RULE: The last line MUST be a single, intelligent technical question directly relevant to their specific project requirements (e.g. asking about their existing codebase, API version, design files, or specific architectural challenge). NEVER ask generic questions like "Are you available for a quick call?", "When can we start?", or "Are you available for a 5-minute review call?".
+- Write like a real person typing a message: short sentences, simple English, confident tone.
+- Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
+- Do not repeat the job post back word for word.
+- Do not invent fake client names, fake links, or fake numbers.
+- Output only the proposal text, nothing before or after it.`,
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
   handsFreeAutoSubmit: true,
@@ -61,6 +77,9 @@ let activeConfig = { ...DEFAULT_CONFIG };
 let processedIds = new Set();
 let isPolling = false;
 const notificationUrls = new Map();
+
+// Global map of pending bids by tabId or URL
+const pendingBidsMap = new Map();
 
 // Initialize service worker
 chrome.runtime.onInstalled.addListener(async () => {
@@ -83,6 +102,33 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     }
   }
 });
+
+// Tab update listener: whenever a Freelancer project page completes loading, deliver autofill payload
+if (chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.url && tab.url.includes('freelancer.com/projects')) {
+      const stored = await chrome.storage.local.get(['pendingAutoBid', 'handsFreeAutoSubmit', 'autoSubmitDelaySeconds']);
+      if (stored && stored.pendingAutoBid) {
+        const pb = stored.pendingAutoBid;
+        if (Date.now() - (pb.timestamp || 0) < 5 * 60 * 1000) {
+          console.log('[FreelancerAutoBid] Dispatching AUTOFILL_BID to loaded tab:', tabId);
+          setTimeout(() => {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'AUTOFILL_BID',
+              data: {
+                ...pb,
+                autoSubmit: stored.handsFreeAutoSubmit !== false,
+                delaySeconds: stored.autoSubmitDelaySeconds || 2,
+              }
+            }).catch(() => {
+              // Tab might still be initializing content script
+            });
+          }, 800);
+        }
+      }
+    }
+  });
+}
 
 // Notification click listener: opens project URL directly on Freelancer!
 if (chrome.notifications && chrome.notifications.onClicked) {
@@ -220,6 +266,20 @@ async function runPollingCycle() {
 
       // Submit Bid or Simulate / Dry-Run
       if (activeConfig.autoBidEnabled) {
+        // Cache pending proposal and bid data to extension storage
+        await chrome.storage.local.set({
+          pendingAutoBid: {
+            proposal,
+            amount: bidAmount,
+            period: project.bidPeriodDays || 5,
+            autoSubmit: activeConfig.handsFreeAutoSubmit !== false,
+            projectId: project.id,
+            timestamp: Date.now(),
+          },
+          handsFreeAutoSubmit: activeConfig.handsFreeAutoSubmit !== false,
+          autoSubmitDelaySeconds: activeConfig.autoSubmitDelaySeconds || 2,
+        });
+
         // Build direct AutoBid URL with proposal and auto_submit flag
         const autoSubmitFlag = activeConfig.handsFreeAutoSubmit !== false ? '1' : '0';
         const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${bidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}&autobid=1&pid=${project.id}`;
@@ -242,7 +302,7 @@ async function runPollingCycle() {
           // Autonomous mode: open tab automatically if autoOpenQualified is enabled (defaults to true)
           if (directApplyUrl && (activeConfig.autoOpenQualified !== false)) {
             console.log('[FreelancerAutoBid] Autonomous Auto-Open matched project in tab:', project.id, directApplyUrl);
-            chrome.tabs.create({ url: directApplyUrl, active: false });
+            chrome.tabs.create({ url: directApplyUrl, active: true });
           }
         } else {
           // If real token provided, submit via Freelancer API

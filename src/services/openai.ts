@@ -41,7 +41,7 @@ export interface ProposalGenerationResult {
 
 export const DEFAULT_PROPOSAL_RULES = `OUTPUT FORMAT (follow exactly):
 
-Line 1: "Hi {client_name}," — if client name is empty, write only "Hi,"
+Line 1: "Hi,"
 [blank line]
 Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
 [blank line]
@@ -52,7 +52,7 @@ Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job i
 Last line: {cta_question}
 
 HARD RULES:
-- The first word of the proposal must always be "Hi". No exceptions.
+- The first line must ALWAYS be exactly "Hi," alone. Do NOT add any name, username, or client title after "Hi,".
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
@@ -63,19 +63,22 @@ HARD RULES:
 - Do not invent fake client names, fake links, or fake numbers.
 - Output only the proposal text, nothing before or after it.`;
 
+function sanitizeProposalGreeting(text: string): string {
+  if (!text) return 'Hi,';
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  // Replace "Hi <anything>," or "Hello <anything>," or "Dear <anything>," on the first line with just "Hi,"
+  cleaned = cleaned.replace(/^(Hi|Hello|Dear)[^\n,]*,\s*/i, 'Hi,\n\n');
+  if (!cleaned.startsWith('Hi,')) {
+    cleaned = `Hi,\n\n${cleaned}`;
+  }
+  return cleaned;
+}
+
 export async function generateProposal(params: GenerateProposalParams): Promise<ProposalGenerationResult> {
   const apiKey = params.customApiKey || process.env.OPENAI_API_KEY;
   const modelName = params.model || 'gpt-4o-mini';
   const useAiPricing = params.useAiPricingAndDays !== false;
-
-  // Clean client name if available (avoid usernames like user_128938)
-  let cleanClientName = '';
-  if (params.clientName && params.clientName.trim()) {
-    const raw = params.clientName.trim();
-    if (!/^\d+$/.test(raw) && !/^user[_\d]/i.test(raw)) {
-      cleanClientName = raw.charAt(0).toUpperCase() + raw.slice(1);
-    }
-  }
 
   const promptTemplate = params.customSystemPrompt && params.customSystemPrompt.trim() !== ''
     ? params.customSystemPrompt
@@ -83,7 +86,7 @@ export async function generateProposal(params: GenerateProposalParams): Promise<
 
   // Replace placeholders in the custom rules / system prompt
   let baseInstruction = promptTemplate
-    .replace(/\{client_name\}/g, cleanClientName)
+    .replace(/\{client_name\}/g, '')
     .replace(/\{skills\}/g, params.mySkills.slice(0, 4).join(', '))
     .replace(/\{portfolio_links\}/g, params.portfolioLinks.slice(0, 2).join(' | '));
 
@@ -107,9 +110,9 @@ export async function generateProposal(params: GenerateProposalParams): Promise<
 
   const systemInstruction = `${baseInstruction}
 
-INSTRUCTIONS FOR CLIENT NAME:
-- If client name is "${cleanClientName}" and not empty, the first line MUST be: "Hi ${cleanClientName},"
-- If client name is empty or unknown, the first line MUST be: "Hi,"
+INSTRUCTIONS FOR FIRST LINE:
+- The first line MUST be simply: "Hi,"
+- Do NOT write any client name, username, or title. Only "Hi," on line 1.
 
 INSTRUCTIONS FOR CLOSING QUESTION:
 - ${ctaInstruction}
@@ -120,7 +123,7 @@ You must also evaluate the project scope, technical requirements, and deliverabl
 Select the most competitive, winning Bid Amount (STRICTLY between ${params.budget.minimum} and ${params.budget.maximum} ${params.budget.currency}) and realistic Delivery Days (e.g., 1-14 days).
 You MUST respond with valid JSON in this exact structure:
 {
-  "proposal": "<your winning proposal under 140 words strictly following the 4 paragraphs and hard rules with the project-specific technical question as the last line>",
+  "proposal": "<your winning proposal under 140 words strictly starting with 'Hi,' and following the paragraphs and hard rules with the project-specific technical question as the last line>",
   "recommendedBidAmount": <number between ${params.budget.minimum} and ${params.budget.maximum}>,
   "recommendedDeliveryDays": <integer delivery days between 1 and 14>,
   "pricingReasoning": "<1 concise sentence explaining the optimal bid amount and timeframe>",
@@ -131,7 +134,6 @@ You MUST respond with valid JSON in this exact structure:
 Budget: ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}
 Skills: ${params.skills.join(', ')}
 ${params.clientCountry ? `Client Location: ${params.clientCountry}` : ''}
-${cleanClientName ? `Client Name: ${cleanClientName}` : ''}
 
 Job Description:
 """
@@ -191,7 +193,7 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
           }
 
           return {
-            proposal: proposal.trim(),
+            proposal: sanitizeProposalGreeting(proposal),
             proposalSource: 'openai',
             modelUsed: modelName,
             wordCount: proposal.split(/\s+/).filter(Boolean).length,
@@ -208,7 +210,7 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
 
       const words = rawText.split(/\s+/).filter(Boolean).length;
       return {
-        proposal: rawText.trim(),
+        proposal: sanitizeProposalGreeting(rawText),
         proposalSource: 'openai',
         modelUsed: modelName,
         wordCount: words,
@@ -248,7 +250,7 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
           }
 
           return {
-            proposal: proposal.trim(),
+            proposal: sanitizeProposalGreeting(proposal),
             proposalSource: 'gemini',
             modelUsed: 'gemini-2.5-flash (OpenAI Fallback)',
             wordCount: proposal.split(/\s+/).filter(Boolean).length,
@@ -261,7 +263,7 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
       }
 
       return {
-        proposal: rawText.trim(),
+        proposal: sanitizeProposalGreeting(rawText),
         proposalSource: 'gemini',
         modelUsed: 'gemini-2.5-flash (OpenAI Fallback)',
         wordCount: rawText.split(/\s+/).filter(Boolean).length,
@@ -274,7 +276,7 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
   }
 
   // 3. Deterministic template fallback strictly following the 4 paragraphs & hard rules format
-  const greeting = cleanClientName ? `Hi ${cleanClientName},` : `Hi,`;
+  const greeting = 'Hi,';
   const primarySkill = params.skills[0] || params.mySkills[0] || 'web development';
   const relatedSkills = params.mySkills.slice(0, 3).join(', ');
   
@@ -313,7 +315,7 @@ I would start by reviewing the exact technical specs, implement the core functio
 ${cta}`;
 
   return {
-    proposal: fallbackProposal.trim(),
+    proposal: sanitizeProposalGreeting(fallbackProposal),
     proposalSource: 'template',
     modelUsed: 'template-fallback (Add OpenAI API Key in Settings)',
     wordCount: fallbackProposal.split(/\s+/).filter(Boolean).length,

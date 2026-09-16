@@ -276,10 +276,10 @@ export const AiPromptEditor: React.FC<AiPromptEditorProps> = ({
                 value={formData.ctaQuestion}
                 onChange={(e) => setFormData({ ...formData, ctaQuestion: e.target.value })}
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                placeholder="e.g. When are you available for a brief 5-minute technical review call?"
+                placeholder="Leave blank for AI to automatically generate a tailored technical question"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
-                Ending with a sharp technical question dramatically increases client reply rate.
+                Ending with a sharp, job-specific technical question dramatically increases client response rate.
               </span>
             </div>
           </div>

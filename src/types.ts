@@ -100,7 +100,7 @@ export const DEFAULT_CONFIG: FilterConfig = {
   ctaQuestion: '',
   systemPrompt: `OUTPUT FORMAT (follow exactly):
 
-Line 1: "Hi {client_name}," — if client name is empty, write only "Hi,"
+Line 1: "Hi,"
 [blank line]
 Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
 [blank line]
@@ -111,7 +111,7 @@ Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job i
 Last line: {cta_question}
 
 HARD RULES:
-- The first word of the proposal must always be "Hi". No exceptions.
+- The first line must ALWAYS be exactly "Hi," alone. Do NOT add any client name, username, or client title after "Hi,".
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
