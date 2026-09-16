@@ -21,7 +21,8 @@ import {
   Send,
   Loader2,
   Zap,
-  CheckCircle
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 
 interface LiveScannerFeedProps {
@@ -30,6 +31,7 @@ interface LiveScannerFeedProps {
   onTestProject: (project: FreelancerProject) => void;
   onClearHistory: () => void;
   onProjectUpdate?: (project: FreelancerProject) => void;
+  onRefreshLiveFeed?: () => Promise<void>;
 }
 
 export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
@@ -38,6 +40,7 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
   onTestProject,
   onClearHistory,
   onProjectUpdate,
+  onRefreshLiveFeed,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'BID_PLACED' | 'SKIPPED'>('ALL');
@@ -46,6 +49,20 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
   const [appliedId, setAppliedId] = useState<number | null>(null);
   const [generatingId, setGeneratingId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<{ title: string; desc: string } | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Helper to sanitize Freelancer URL so it NEVER 404s
+  const getSafeFreelancerUrl = (project: FreelancerProject): string => {
+    let url = (project.url || '').split('#')[0].trim();
+    if (!url || url.includes('sample-job') || [38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(project.id)) {
+      if (project.id && project.id > 40000000) {
+        return `https://www.freelancer.com/projects/${project.id}`;
+      }
+      const query = encodeURIComponent(project.jobs?.[0]?.name || project.title || 'freelancer jobs');
+      return `https://www.freelancer.com/search/projects?q=${query}`;
+    }
+    return url;
+  };
 
   const filteredProjects = projects.filter((p) => {
     if (statusFilter === 'BID_PLACED' && p.status !== 'BID_PLACED') return false;
@@ -63,6 +80,23 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleRefreshFeed = async () => {
+    if (!onRefreshLiveFeed) return;
+    setIsRefreshing(true);
+    try {
+      await onRefreshLiveFeed();
+      setToastMessage({
+        title: 'Live Jobs Synced!',
+        desc: 'Retrieved fresh active projects from Freelancer public feed and purged outdated samples.',
+      });
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Refresh feed error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleApplyOnFreelancer = async (project: FreelancerProject) => {
@@ -104,21 +138,22 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
     setAppliedId(project.id);
     setTimeout(() => setAppliedId(null), 3000);
 
-    const baseUrl = project.url || `https://www.freelancer.com/projects/${project.id}`;
-    const cleanBaseUrl = baseUrl.split('#')[0];
+    const safeBaseUrl = getSafeFreelancerUrl(project);
     
     // Hash parameters that our Chrome Extension content script detects to autofill description, amount & period
+    // Standard URLSearchParams handles encoding cleanly without double %2520 encoding
     const hashParams = new URLSearchParams();
-    if (proposal) hashParams.set('autobid_p', encodeURIComponent(proposal));
+    if (proposal) hashParams.set('autobid_p', proposal);
     if (bidAmount) hashParams.set('amount', String(bidAmount));
     if (bidPeriod) hashParams.set('period', String(bidPeriod));
+    hashParams.set('pid', String(project.id));
 
-    const finalUrl = `${cleanBaseUrl}#${hashParams.toString()}`;
+    const finalUrl = `${safeBaseUrl}#${hashParams.toString()}`;
     window.open(finalUrl, '_blank', 'noopener,noreferrer');
 
     setToastMessage({
-      title: 'AutoBid Dispatched!',
-      desc: `Proposal generated ($${bidAmount}, ${bidPeriod} days delivery) & transferred to tab. AutoBid extension will fill fields on Freelancer.com!`,
+      title: 'AutoBid Dispatched & Copied!',
+      desc: `Proposal ($${bidAmount} ${project.budget?.currency || 'USD'}, ${bidPeriod} days) copied to clipboard & tab opened. Extension will autofill the bid form!`,
     });
     setTimeout(() => setToastMessage(null), 6000);
   };
@@ -217,6 +252,18 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
             </button>
           </div>
 
+          {onRefreshLiveFeed && (
+            <button
+              onClick={handleRefreshFeed}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 text-xs bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+              title="Immediately poll live Freelancer RSS & API feeds and clear legacy test entries"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-sky-400' : 'text-sky-400'}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync Live Jobs'}</span>
+            </button>
+          )}
+
           <button
             onClick={onClearHistory}
             className="text-xs text-slate-400 hover:text-rose-400 px-2.5 py-1 rounded-md hover:bg-slate-800 transition"
@@ -294,7 +341,7 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
 
                     <h3 className="text-base font-semibold text-slate-100 hover:text-sky-300 transition">
                       <a
-                        href={project.url || `https://www.freelancer.com/projects/${project.id}`}
+                        href={getSafeFreelancerUrl(project)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5"

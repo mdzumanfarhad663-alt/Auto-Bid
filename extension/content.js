@@ -27,8 +27,20 @@
       const period = params.get('period') || params.get('delivery_days');
 
       if (proposal || amount || period) {
+        let safeProposal = proposal;
+        if (safeProposal) {
+          try {
+            // Only decode if it actually contains encoded sequences
+            if (safeProposal.includes('%20') || safeProposal.includes('%0A') || safeProposal.includes('%25')) {
+              safeProposal = decodeURIComponent(safeProposal);
+            }
+          } catch (e) {
+            // Keep raw if decodeURIComponent throws
+          }
+        }
+
         return {
-          proposal: proposal ? decodeURIComponent(proposal) : null,
+          proposal: safeProposal || null,
           amount: amount || null,
           period: period || null,
         };
@@ -90,9 +102,13 @@
       'textarea#description',
       'textarea[name="descr"]',
       'textarea[data-qa="bid-description"]',
+      'textarea[data-qa="bid-description-input"]',
       'textarea[name="description"]',
       'app-project-view-bid-form textarea',
+      'fl-textarea[formcontrolname="description"] textarea',
       'fl-textarea textarea',
+      'textarea[placeholder*="proposal" i]',
+      'textarea[placeholder*="details" i]',
       '.BidForm-textarea',
       'textarea',
     ],
@@ -101,8 +117,10 @@
       'input#bidAmount',
       'input[name="sum"]',
       'input[data-qa="bid-amount"]',
+      'input[data-qa="bid-amount-input"]',
       'input#floating-bid-amount',
       'fl-input[formcontrolname="bidAmount"] input',
+      'input[placeholder*="amount" i]',
       'input[type="number"]',
     ],
     period: [
@@ -110,7 +128,9 @@
       'input#period',
       'input[name="period"]',
       'input[data-qa="bid-period"]',
+      'input[data-qa="bid-period-input"]',
       'fl-input[formcontrolname="period"] input',
+      'input[placeholder*="days" i]',
       'input[name="delivery_period"]',
     ],
   };
@@ -274,4 +294,8 @@
   } else {
     init();
   }
+
+  // React to single-page navigation and direct hash modifications
+  window.addEventListener('hashchange', init);
+  window.addEventListener('popstate', init);
 })();

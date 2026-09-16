@@ -154,10 +154,26 @@ export default function App() {
       const res = await fetch('/api/poll-now', { method: 'POST' });
       if (res.ok) {
         await fetchData();
-        setPollCountdown(20);
+        setPollCountdown(config.pollIntervalSeconds || 30);
       }
     } catch (e) {
       console.error('Manual poll failed', e);
+    } finally {
+      setIsPolling(false);
+    }
+  };
+
+  // Immediate Refresh from Live Freelancer Feeds & Purge Stale Mock Data
+  const handleRefreshLiveFeed = async () => {
+    setIsPolling(true);
+    try {
+      const res = await fetch('/api/refresh-live-feed', { method: 'POST' });
+      if (res.ok) {
+        await fetchData();
+        setPollCountdown(config.pollIntervalSeconds || 30);
+      }
+    } catch (e) {
+      console.error('Failed to refresh live feed:', e);
     } finally {
       setIsPolling(false);
     }
@@ -217,6 +233,7 @@ export default function App() {
                 config={config}
                 onTestProject={handleOpenTesterForProject}
                 onClearHistory={handleClearHistory}
+                onRefreshLiveFeed={handleRefreshLiveFeed}
                 onProjectUpdate={(updated) => {
                   setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
                   fetchData();

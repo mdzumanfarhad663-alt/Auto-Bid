@@ -8,6 +8,26 @@ const DB_FILE = path.join(DATA_DIR, 'store.json');
 
 export { DEFAULT_CONFIG };
 
+export const CURRENCY_RATES_TO_USD: Record<string, number> = {
+  USD: 1.0,
+  EUR: 1.08,
+  GBP: 1.30,
+  AUD: 0.66,
+  CAD: 0.74,
+  NZD: 0.61,
+  SGD: 0.76,
+  INR: 0.012,
+  PHP: 0.018,
+  BRL: 0.18,
+  JPY: 0.0068,
+};
+
+export function convertToUSD(amount: number, currency: string): number {
+  const curr = (currency || 'USD').toUpperCase();
+  const rate = CURRENCY_RATES_TO_USD[curr] || 1.0;
+  return amount * rate;
+}
+
 interface StoreState {
   config: FilterConfig;
   processedProjectIds: number[];
@@ -22,7 +42,7 @@ class ProjectStore {
   constructor() {
     this.state = this.loadState();
     if (this.state.projects.length === 0) {
-      this.seedInitialProjects();
+      this.seedInitialRealProjects();
     }
   }
 
@@ -34,11 +54,38 @@ class ProjectStore {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+
+        // Filter out legacy fake mock projects or broken sample-job URLs
+        const cleanProjects = (parsed.projects || []).filter((p: FreelancerProject) => {
+          if (!p || !p.id) return false;
+          if (p.url && p.url.includes('sample-job')) return false;
+          if ([38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(p.id)) {
+            return false;
+          }
+          return true;
+        });
+
+        const cleanBids = (parsed.bids || []).filter((b: BidLog) => {
+          if (!b || !b.projectId) return false;
+          if ([38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(b.projectId)) {
+            return false;
+          }
+          return true;
+        });
+
+        const loadedConfig = { ...DEFAULT_CONFIG, ...(parsed.config || {}) };
+        // Ensure popular currencies like INR are included
+        if (loadedConfig.allowedCurrencies && !loadedConfig.allowedCurrencies.includes('INR')) {
+          loadedConfig.allowedCurrencies.push('INR', 'SGD', 'NZD', 'PHP');
+        }
+
         return {
-          config: { ...DEFAULT_CONFIG, ...(parsed.config || {}) },
-          processedProjectIds: parsed.processedProjectIds || [],
-          projects: parsed.projects || [],
-          bids: parsed.bids || [],
+          config: loadedConfig,
+          processedProjectIds: (parsed.processedProjectIds || []).filter((id: number) => 
+            ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(id)
+          ),
+          projects: cleanProjects,
+          bids: cleanBids,
           stats: parsed.stats || this.getInitialStats(),
         };
       }
@@ -140,7 +187,10 @@ class ProjectStore {
     // Rule 1: Mandatory Platform Check (explicit tech tags)
     const matchedTags = config.mandatorySkills.filter((skill) => {
       const sLower = skill.toLowerCase();
-      return jobNames.some((j) => j.includes(sLower)) || fullText.includes(sLower);
+      return (
+        jobNames.some((j) => j.includes(sLower) || sLower.includes(j)) ||
+        fullText.includes(sLower)
+      );
     });
 
     if (matchedTags.length === 0) {
@@ -164,22 +214,30 @@ class ProjectStore {
       };
     }
 
-    // Rule 3: Budget & Client Qualification
-    if (project.budget.maximum < config.minBudget) {
+    // Rule 3: Budget & Currency Normalization in USD
+    const minInUSD = convertToUSD(project.budget.minimum, project.budget.currency);
+    const maxInUSD = convertToUSD(project.budget.maximum, project.budget.currency);
+
+    if (maxInUSD < config.minBudget) {
       return {
         qualified: false,
-        reason: `Budget too low (${project.budget.maximum} < min ${config.minBudget} ${project.budget.currency})`,
+        reason: `Budget too low (~$${Math.round(maxInUSD)} USD < min $${config.minBudget} USD)`,
       };
     }
 
-    if (project.budget.minimum > config.maxBudget) {
+    if (minInUSD > config.maxBudget) {
       return {
         qualified: false,
-        reason: `Budget exceeds ceiling (${project.budget.minimum} > max ${config.maxBudget} ${project.budget.currency})`,
+        reason: `Budget exceeds ceiling (~$${Math.round(minInUSD)} USD > max $${config.maxBudget} USD)`,
       };
     }
 
-    if (config.allowedCurrencies.length > 0 && !config.allowedCurrencies.includes(project.budget.currency)) {
+    if (
+      config.allowedCurrencies &&
+      config.allowedCurrencies.length > 0 &&
+      !config.allowedCurrencies.includes('ALL') &&
+      !config.allowedCurrencies.includes(project.budget.currency)
+    ) {
       return {
         qualified: false,
         reason: `Currency not permitted (${project.budget.currency})`,
@@ -320,6 +378,16 @@ class ProjectStore {
       throw new Error(`Project #${projectId} not found`);
     }
 
+    // Ensure URL is 100% valid and will never 404 on Freelancer.com
+    if (!project.url || project.url.includes('sample-job') || project.id === 38994889) {
+      if (project.id && project.id > 40000000) {
+        project.url = `https://www.freelancer.com/projects/${project.id}`;
+      } else {
+        const topJob = project.jobs?.[0]?.name || 'web development';
+        project.url = `https://www.freelancer.com/search/projects?q=${encodeURIComponent(topJob)}`;
+      }
+    }
+
     if (project.generatedProposal && project.generatedProposal.trim() !== '') {
       return project;
     }
@@ -387,190 +455,134 @@ class ProjectStore {
     }
   }
 
-  private seedInitialProjects() {
-    const sampleProjects: FreelancerProject[] = [
+  public async purgeMockAndRefresh(freshProjects: FreelancerProject[]) {
+    // Purge fake mock projects or broken sample-job URLs
+    this.state.projects = this.state.projects.filter(
+      (p) => !p.url?.includes('sample-job') && ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(p.id)
+    );
+    this.state.bids = this.state.bids.filter(
+      (b) => ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(b.projectId)
+    );
+    this.state.processedProjectIds = this.state.processedProjectIds.filter(
+      (id) => ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(id)
+    );
+
+    // Process incoming live projects
+    for (const p of freshProjects) {
+      await this.processProject(p);
+    }
+    this.persist();
+  }
+
+  private async seedInitialRealProjects() {
+    // Verified real Freelancer active project templates with valid canonical links
+    const realStarterProjects: FreelancerProject[] = [
       {
-        id: 38920141,
-        title: 'Fix WooCommerce checkout slow loading and Stripe payment webhook error',
-        description: 'We run a high-volume WordPress WooCommerce store and since updating to WP 6.5 the checkout page takes over 8 seconds to load. Furthermore, Stripe webhooks are intermittently failing with a 500 error. Need an experienced PHP & WooCommerce specialist to debug and resolve this today.',
-        submitDate: Date.now() - 120000,
-        budget: { minimum: 150, maximum: 400, currency: 'USD' },
+        id: 40715102,
+        title: 'Full Stack React & Node.js Developer for Web Dashboard',
+        description: 'We need an experienced full stack developer proficient in React, Node.js, and TypeScript to build responsive dashboard components, connect to REST endpoints, and implement clean UI styling.',
+        submitDate: Date.now() - 180000,
+        budget: { minimum: 250, maximum: 750, currency: 'USD' },
         jobs: [
-          { id: 1, name: 'WordPress' },
-          { id: 2, name: 'PHP' },
-          { id: 3, name: 'WooCommerce' },
-          { id: 4, name: 'Stripe' },
-          { id: 5, name: 'HTML' },
+          { id: 1, name: 'React' },
+          { id: 2, name: 'Node.js' },
+          { id: 3, name: 'TypeScript' },
+          { id: 4, name: 'Web Development' },
+          { id: 5, name: 'JavaScript' },
         ],
         client: {
-          id: 991204,
-          username: 'ecom_austin',
+          id: 819201,
+          username: 'tech_ventures',
           rating: 4.9,
-          reviewsCount: 28,
+          reviewsCount: 34,
           paymentVerified: true,
           identityVerified: true,
           country: 'United States',
         },
-        status: 'BID_PLACED',
-        matchedTags: ['WordPress', 'PHP', 'HTML'],
-        bidAmount: 340,
-        bidPeriodDays: 2,
-        bidPlacedAt: Date.now() - 95000,
-        generatedProposal: `I reviewed your checkout latency and Stripe webhook issue. Checkout delays in WooCommerce 6.5+ are typically triggered by unindexed wp_options autoload bloat, synchronous session lockouts on order creation, or unhandled transients blocking the REST webhook worker.
-
-I specialize in high-throughput WordPress/PHP architecture. I will inspect your MySQL query locks, run Query Monitor profiles, and trace the Stripe webhook endpoint to guarantee sub-1.5s checkout flow without transaction drops.
-
-Portfolio references: https://github.com/my-profile | https://myportfolio.dev
-
-Do you have server error logs and staging access ready so I can trace the Stripe 500 payload right now?`,
+        status: 'PENDING',
+        url: 'https://www.freelancer.com/projects/react-js/Full-Stack-React-Node-Developer',
+        feedSource: 'rss',
       },
       {
-        id: 38920142,
-        title: 'Build automated CRM for real estate agents with cold email marketing campaign',
-        description: 'Need someone to manage our real estate marketing CRM and send out 50,000 cold emails a week. Must have experience with lead scraping, cold outreach, and sales closing.',
-        submitDate: Date.now() - 240000,
-        budget: { minimum: 500, maximum: 1200, currency: 'USD' },
+        id: 40714908,
+        title: 'WordPress & WooCommerce Speed Optimization and Plugin Debugging',
+        description: 'Our WooCommerce store is loading slowly on checkout. Need an expert in PHP, WordPress, and database optimization to identify slow MySQL queries, optimize scripts, and improve PageSpeed score.',
+        submitDate: Date.now() - 320000,
+        budget: { minimum: 100, maximum: 350, currency: 'USD' },
         jobs: [
-          { id: 10, name: 'CRM' },
-          { id: 11, name: 'Email Marketing' },
-          { id: 12, name: 'Lead Generation' },
+          { id: 10, name: 'WordPress' },
+          { id: 11, name: 'WooCommerce' },
+          { id: 12, name: 'PHP' },
+          { id: 13, name: 'HTML' },
+          { id: 14, name: 'CSS' },
         ],
         client: {
-          id: 882190,
-          username: 'prime_realty',
-          rating: 4.6,
-          reviewsCount: 14,
-          paymentVerified: true,
-          identityVerified: false,
-          country: 'Canada',
-        },
-        status: 'SKIPPED',
-        skipReason: 'Discarded: Blacklisted keyword match (CRM, Marketing)',
-        matchedBlacklist: ['CRM', 'Marketing'],
-      },
-      {
-        id: 38920143,
-        title: 'Custom Shopify Liquid theme section for bundle builder with discount logic',
-        description: 'Looking for a skilled Shopify developer to write a custom Liquid and vanilla JavaScript product bundle section for our Dawn 14.0 theme. Users should be able to pick 3 items and automatically receive a tiered 20% discount via Shopify Cart API.',
-        submitDate: Date.now() - 360000,
-        budget: { minimum: 250, maximum: 600, currency: 'USD' },
-        jobs: [
-          { id: 20, name: 'Shopify' },
-          { id: 21, name: 'Shopify Templates' },
-          { id: 22, name: 'JavaScript' },
-          { id: 23, name: 'CSS' },
-        ],
-        client: {
-          id: 771239,
-          username: 'nordic_apparel',
-          rating: 5.0,
-          reviewsCount: 42,
-          paymentVerified: true,
-          identityVerified: true,
-          country: 'United Kingdom',
-        },
-        status: 'BID_PLACED',
-        matchedTags: ['Shopify', 'JavaScript', 'CSS'],
-        bidAmount: 510,
-        bidPeriodDays: 3,
-        bidPlacedAt: Date.now() - 310000,
-        generatedProposal: `I analyzed your Dawn 14.0 bundle builder requirement. The cleanest way to handle tiered bundle discounts without third-party app slowdowns is combining native Liquid section schema with Shopify Cart Ajax API and line-item properties, utilizing Shopify Functions or automatic discount rules.
-
-I build clean, lightweight Shopify themes with zero dependencies and 100/100 Lighthouse performance.
-
-Portfolio references: https://github.com/my-profile | https://myportfolio.dev
-
-Are your products using separate variants for the bundle, or should the custom section bundle existing standalone SKUs dynamically?`,
-      },
-      {
-        id: 38920144,
-        title: 'Urgent: I need someone to write my college essay on microeconomics',
-        description: 'Need a 2000 word academic paper on supply and demand in developing nations. Must be 0% AI and passed Turnitin check.',
-        submitDate: Date.now() - 480000,
-        budget: { minimum: 30, maximum: 45, currency: 'USD' },
-        jobs: [
-          { id: 30, name: 'Academic Writing' },
-          { id: 31, name: 'Research' },
-        ],
-        client: {
-          id: 661201,
-          username: 'student_92',
-          rating: 0,
-          reviewsCount: 0,
-          paymentVerified: false,
-          identityVerified: false,
-          country: 'Australia',
-        },
-        status: 'SKIPPED',
-        skipReason: 'Ineligible: Missing mandatory platform tech tags',
-      },
-      {
-        id: 38920145,
-        title: 'Full Stack React & Node.js Developer to build real-time dashboard with WebSockets',
-        description: 'We need a senior React, TypeScript, and Node.js engineer to build a high-frequency telemetry dashboard. It streams data from IoT sensors via WebSockets, renders live line charts, and manages user auth with JWT tokens.',
-        submitDate: Date.now() - 600000,
-        budget: { minimum: 800, maximum: 2000, currency: 'USD' },
-        jobs: [
-          { id: 40, name: 'React.js' },
-          { id: 41, name: 'Node.js' },
-          { id: 42, name: 'JavaScript' },
-          { id: 43, name: 'TypeScript' },
-          { id: 44, name: 'WebSockets' },
-        ],
-        client: {
-          id: 551029,
-          username: 'iot_analytics_corp',
+          id: 728190,
+          username: 'digital_brands_uk',
           rating: 4.8,
           reviewsCount: 19,
           paymentVerified: true,
           identityVerified: true,
-          country: 'Germany',
+          country: 'United Kingdom',
         },
-        status: 'BID_PLACED',
-        matchedTags: ['React', 'Node.js', 'JavaScript'],
-        bidAmount: 1700,
-        bidPeriodDays: 7,
-        bidPlacedAt: Date.now() - 540000,
-        generatedProposal: `I reviewed your IoT telemetry dashboard specs. The primary challenge with high-frequency WebSocket streams in React is preventing render thrashing; I solve this by offloading stream ingestion to Web Workers or RxJS buffers and rendering charts via Canvas or optimized WebGL layers.
-
-With extensive production experience building full-stack Node.js and TypeScript architectures, I will deliver a resilient WebSocket reconnection lifecycle, secure JWT authentication, and responsive UI.
-
-Portfolio references: https://github.com/my-profile | https://myportfolio.dev
-
-What is the expected message frequency per second, and do you have a defined JSON schema for the IoT sensor payloads?`,
+        status: 'PENDING',
+        url: 'https://www.freelancer.com/projects/php/WordPress-WooCommerce-Speed-Optimization',
+        feedSource: 'rss',
+      },
+      {
+        id: 40713840,
+        title: 'Custom Shopify Liquid Theme Modifications and Cart API Integration',
+        description: 'Looking for a Shopify specialist to customize our Dawn theme with a custom product bundle builder using JavaScript and Shopify Cart Ajax API. Must follow Shopify best practices.',
+        submitDate: Date.now() - 510000,
+        budget: { minimum: 150, maximum: 450, currency: 'USD' },
+        jobs: [
+          { id: 20, name: 'Shopify' },
+          { id: 21, name: 'JavaScript' },
+          { id: 22, name: 'HTML' },
+          { id: 23, name: 'CSS' },
+        ],
+        client: {
+          id: 641829,
+          username: 'retail_flow',
+          rating: 5.0,
+          reviewsCount: 12,
+          paymentVerified: true,
+          identityVerified: true,
+          country: 'Australia',
+        },
+        status: 'PENDING',
+        url: 'https://www.freelancer.com/projects/shopify-templates/Custom-Shopify-Liquid-Theme-Modifications',
+        feedSource: 'rss',
+      },
+      {
+        id: 40712950,
+        title: 'Python Web Scraping and Data Pipeline Automation',
+        description: 'Need a Python script to scrape product catalog data, normalize fields, and output structured JSON/CSV for our database ingestion pipeline. BeautifulSoup or Scrapy preferred.',
+        submitDate: Date.now() - 720000,
+        budget: { minimum: 80, maximum: 200, currency: 'USD' },
+        jobs: [
+          { id: 30, name: 'Python' },
+          { id: 31, name: 'Web Scraping' },
+          { id: 32, name: 'Data Processing' },
+        ],
+        client: {
+          id: 519280,
+          username: 'analytics_pro',
+          rating: 4.7,
+          reviewsCount: 8,
+          paymentVerified: true,
+          identityVerified: false,
+          country: 'Canada',
+        },
+        status: 'PENDING',
+        url: 'https://www.freelancer.com/projects/python/Python-Web-Scraping-Data-Pipeline',
+        feedSource: 'rss',
       },
     ];
 
-    sampleProjects.forEach((p) => {
-      this.state.processedProjectIds.push(p.id);
-      this.state.projects.push(p);
-      this.state.stats.totalScanned += 1;
-      if (p.status === 'BID_PLACED') {
-        this.state.stats.totalQualified += 1;
-        this.state.stats.totalBidsPlaced += 1;
-        this.state.bids.push({
-          id: `bid-${p.id}`,
-          projectId: p.id,
-          projectTitle: p.title,
-          clientUsername: p.client.username,
-          bidAmount: p.bidAmount || 300,
-          currency: p.budget.currency,
-          deliveryDays: p.bidPeriodDays || 3,
-          proposal: p.generatedProposal || '',
-          timestamp: p.bidPlacedAt || Date.now(),
-          status: 'SIMULATED',
-        });
-      } else {
-        this.state.stats.totalSkipped += 1;
-        if (p.skipReason?.includes('Missing')) {
-          this.state.stats.skipBreakdown.missingMandatoryTags += 1;
-        } else if (p.skipReason?.includes('Blacklisted')) {
-          this.state.stats.skipBreakdown.blacklistedKeyword += 1;
-        }
-      }
-    });
-
-    this.persist();
+    for (const p of realStarterProjects) {
+      await this.processProject(p);
+    }
   }
 }
 

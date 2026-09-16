@@ -310,7 +310,7 @@ export async function fetchFreelancerActiveProjects(): Promise<FreelancerProject
         country: template.client.country,
       },
       status: 'PENDING',
-      url: `https://www.freelancer.com/projects/sample-job-${randomizedId}`,
+      url: `https://www.freelancer.com/search/projects?q=${encodeURIComponent(template.jobs[0] || 'web development')}`,
       feedSource: 'direct',
     },
   ];

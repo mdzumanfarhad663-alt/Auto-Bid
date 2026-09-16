@@ -6,7 +6,7 @@ import JSZip from 'jszip';
 import { createServer as createViteServer } from 'vite';
 import { projectStore } from './src/services/store.ts';
 import { generateProposal } from './src/services/openai.ts';
-import { runPollCycle, startBackgroundPoller } from './src/services/freelancer-poller.ts';
+import { runPollCycle, startBackgroundPoller, fetchFreelancerActiveProjects } from './src/services/freelancer-poller.ts';
 
 const app = express();
 const PORT = 3000;
@@ -130,6 +130,22 @@ app.post('/api/poll-now', async (req, res) => {
       success: true,
       scannedCount: results.length,
       projects: results,
+      stats: projectStore.getStats(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Purge mock/stale entries and refresh live Freelancer feed immediately
+app.post('/api/refresh-live-feed', async (req, res) => {
+  try {
+    const liveProjects = await fetchFreelancerActiveProjects();
+    await projectStore.purgeMockAndRefresh(liveProjects);
+    res.json({
+      success: true,
+      count: liveProjects.length,
+      projects: projectStore.getProjects(100),
       stats: projectStore.getStats(),
     });
   } catch (err: any) {

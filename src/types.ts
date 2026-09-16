@@ -59,19 +59,34 @@ export interface FilterConfig {
 export const DEFAULT_CONFIG: FilterConfig = {
   autoBidEnabled: true,
   dryRunMode: true, // safe default: simulated bids until live token confirmed
-  pollIntervalSeconds: 30, // Default 30s or 60s as requested
+  pollIntervalSeconds: 30, // Default 30s or 60s
   feedSource: 'auto', // 'auto' | 'rss' | 'public_api' - 100% No OAuth required!
   desktopNotifications: true,
   audioAlerts: true,
-  mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry'],
+  mandatorySkills: [
+    'WordPress',
+    'Shopify',
+    'PHP',
+    'HTML',
+    'CSS',
+    'JavaScript',
+    'React',
+    'Node.js',
+    'Next.js',
+    'Python',
+    'Web Development',
+    'Full Stack Development',
+    'SEO',
+    'Data Entry'
+  ],
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
-  minBudget: 20,
-  maxBudget: 3500,
-  allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR'],
-  requirePaymentVerified: false, // Default false so public feed projects aren't blocked
+  minBudget: 15,
+  maxBudget: 5000,
+  allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
+  requirePaymentVerified: false, // Default false so public live feeds are not blocked
   minClientRating: 4.0,
   minClientReviews: 0,
-  freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
+  freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'PHP', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
   ctaQuestion: 'Are you available for a quick 5-minute technical review call to confirm the timeline?',
   systemPrompt: `You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.
