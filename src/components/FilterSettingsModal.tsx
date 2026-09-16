@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilterConfig } from '../types.ts';
+import { FilterConfig, DEFAULT_CONFIG } from '../types.ts';
 import { 
   X, 
   Plus, 
@@ -12,7 +12,6 @@ import {
   HelpCircle, 
   Sparkles 
 } from 'lucide-react';
-import { DEFAULT_CONFIG } from '../services/store.ts';
 
 interface FilterSettingsModalProps {
   isOpen: boolean;

@@ -14,8 +14,7 @@ import { AiPromptEditor } from './components/AiPromptEditor.tsx';
 import { CodeExportStudio } from './components/CodeExportStudio.tsx';
 import { SetupGuide } from './components/SetupGuide.tsx';
 import { ProposalTesterModal } from './components/ProposalTesterModal.tsx';
-import { DEFAULT_CONFIG } from './services/store.ts';
-import { FilterConfig, FreelancerProject, BidLog, SystemStats } from './types.ts';
+import { FilterConfig, FreelancerProject, BidLog, SystemStats, DEFAULT_CONFIG } from './types.ts';
 
 export default function App() {
   const [config, setConfig] = useState<FilterConfig>(DEFAULT_CONFIG);

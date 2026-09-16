@@ -54,6 +54,36 @@ export interface FilterConfig {
   defaultDeliveryDays: number;
 }
 
+export const DEFAULT_CONFIG: FilterConfig = {
+  autoBidEnabled: true,
+  dryRunMode: true, // safe default: simulated bids until live token confirmed
+  pollIntervalSeconds: 30, // Default 30s or 60s as requested
+  feedSource: 'auto', // 'auto' | 'rss' | 'public_api' - 100% No OAuth required!
+  desktopNotifications: true,
+  audioAlerts: true,
+  mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry'],
+  negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
+  minBudget: 20,
+  maxBudget: 3500,
+  allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR'],
+  requirePaymentVerified: false, // Default false so public feed projects aren't blocked
+  minClientRating: 4.0,
+  minClientReviews: 0,
+  freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
+  portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
+  ctaQuestion: 'Are you available for a quick 5-minute technical review call to confirm the timeline?',
+  systemPrompt: `You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.
+RULES:
+1. Strict limit: UNDER 140 WORDS.
+2. Directly identify and address the client's exact problem in sentence #1. No generic greetings.
+3. Reference relevant skills: {skills}.
+4. Provide portfolio proof: {portfolio_links}.
+5. End with this technical question: "{cta_question}"`,
+  openaiModel: 'gpt-4o-mini',
+  bidPercentageOfMaxBudget: 85,
+  defaultDeliveryDays: 5,
+};
+
 export interface BidLog {
   id: string;
   projectId: number;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilterConfig } from '../types.ts';
+import { FilterConfig, DEFAULT_CONFIG } from '../types.ts';
 import { 
   Sparkles, 
   Save, 
@@ -11,7 +11,6 @@ import {
   Check, 
   Plus 
 } from 'lucide-react';
-import { DEFAULT_CONFIG } from '../services/store.ts';
 
 interface AiPromptEditorProps {
   config: FilterConfig;
