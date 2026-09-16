@@ -7,13 +7,22 @@
     "storage",
     "alarms",
     "notifications",
-    "tabs"
+    "tabs",
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "https://www.freelancer.com/*",
     "https://api.openai.com/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.freelancer.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
   ],
   "background": {
     "service_worker": "background.js",

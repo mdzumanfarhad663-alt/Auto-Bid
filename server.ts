@@ -62,6 +62,54 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
+// Generate proposal on-demand for a project (Saves OpenAI tokens!)
+app.post('/api/projects/:id/prepare-bid', async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id, 10);
+    if (isNaN(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+    const updated = await projectStore.generateProposalForProject(projectId);
+    res.json({
+      success: true,
+      project: updated,
+      proposal: updated.generatedProposal,
+      bidAmount: updated.bidAmount,
+      bidPeriodDays: updated.bidPeriodDays,
+      currency: updated.budget.currency,
+      url: updated.url,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Validate OpenAI API Key
+app.post('/api/validate-openai-key', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || apiKey.trim() === '') {
+      return res.status(400).json({ valid: false, error: 'API Key is empty' });
+    }
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+      },
+    });
+    if (response.ok) {
+      res.json({ valid: true, message: 'OpenAI API key verified successfully!' });
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      res.status(400).json({
+        valid: false,
+        error: errorData.error?.message || `OpenAI rejected key (HTTP ${response.status})`,
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
 // Bids logs
 app.get('/api/bids', (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 100;
@@ -126,11 +174,13 @@ app.get('/api/download-extension-zip', async (req, res) => {
 
     const manifestContent = fs.readFileSync(path.join(extDir, 'manifest.json'), 'utf-8');
     const backgroundContent = fs.readFileSync(path.join(extDir, 'background.js'), 'utf-8');
+    const contentJs = fs.readFileSync(path.join(extDir, 'content.js'), 'utf-8');
     const popupHtml = fs.readFileSync(path.join(extDir, 'popup.html'), 'utf-8');
     const popupJs = fs.readFileSync(path.join(extDir, 'popup.js'), 'utf-8');
 
     zip.file('manifest.json', manifestContent);
     zip.file('background.js', backgroundContent);
+    zip.file('content.js', contentJs);
     zip.file('popup.html', popupHtml);
     zip.file('popup.js', popupJs);
 

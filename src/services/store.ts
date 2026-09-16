@@ -246,7 +246,7 @@ class ProjectStore {
 
     // Qualified!
     this.state.stats.totalQualified += 1;
-    project.status = 'QUALIFIED';
+    project.status = 'BID_PLACED';
     project.matchedTags = evaluation.matchedTags;
 
     // Calculate smart bid amount based on percentage of client maximum budget
@@ -257,53 +257,117 @@ class ProjectStore {
     project.bidAmount = bidAmount;
     project.bidPeriodDays = config.defaultDeliveryDays;
 
-    // Generate Proposal using gpt-4o-mini
-    try {
-      const aiResult = await generateProposal({
-        projectTitle: project.title,
-        projectDescription: project.description,
-        skills: project.jobs.map((j) => j.name),
-        budget: project.budget,
-        clientCountry: project.client.country,
-        mySkills: config.freelancerSkills,
-        portfolioLinks: config.portfolioLinks,
-        ctaQuestion: config.ctaQuestion,
-        customSystemPrompt: config.systemPrompt,
-        model: config.openaiModel,
-      });
-
-      project.generatedProposal = aiResult.proposal;
-
-      // Auto-submit bid if enabled
-      if (config.autoBidEnabled) {
-        const isSimulated = config.dryRunMode;
-        project.status = 'BID_PLACED';
-        project.bidPlacedAt = Date.now();
-        this.state.stats.totalBidsPlaced += 1;
-
-        const bidLog: BidLog = {
-          id: `bid-${Date.now()}-${project.id}`,
-          projectId: project.id,
+    // If generateOnDemand is false (preemptive mode), generate proposal right away.
+    // By default generateOnDemand is TRUE to save OpenAI tokens until the user clicks 1-Click Apply!
+    if (!config.generateOnDemand) {
+      try {
+        const aiResult = await generateProposal({
           projectTitle: project.title,
-          clientUsername: project.client.username,
-          bidAmount: bidAmount,
-          currency: project.budget.currency,
-          deliveryDays: config.defaultDeliveryDays,
-          proposal: project.generatedProposal,
-          timestamp: Date.now(),
-          status: isSimulated ? 'SIMULATED' : 'SUCCESS',
-        };
+          projectDescription: project.description,
+          skills: project.jobs.map((j) => j.name),
+          budget: project.budget,
+          clientCountry: project.client.country,
+          mySkills: config.freelancerSkills,
+          portfolioLinks: config.portfolioLinks,
+          ctaQuestion: config.ctaQuestion,
+          customSystemPrompt: config.systemPrompt,
+          customApiKey: config.openaiApiKey,
+          model: config.openaiModel,
+        });
 
-        this.state.bids.unshift(bidLog);
+        project.generatedProposal = aiResult.proposal;
+
+        if (config.autoBidEnabled) {
+          const isSimulated = config.dryRunMode;
+          project.bidPlacedAt = Date.now();
+          this.state.stats.totalBidsPlaced += 1;
+
+          const bidLog: BidLog = {
+            id: `bid-${Date.now()}-${project.id}`,
+            projectId: project.id,
+            projectTitle: project.title,
+            clientUsername: project.client.username,
+            bidAmount: bidAmount,
+            currency: project.budget.currency,
+            deliveryDays: config.defaultDeliveryDays,
+            proposal: project.generatedProposal,
+            timestamp: Date.now(),
+            status: isSimulated ? 'SIMULATED' : 'SUCCESS',
+          };
+
+          this.state.bids.unshift(bidLog);
+        }
+      } catch (error: any) {
+        console.error('Error generating bid for project:', project.id, error);
+        project.skipReason = `AI Bid Error: ${error.message}`;
       }
-    } catch (error: any) {
-      console.error('Error generating bid for project:', project.id, error);
-      project.status = 'FAILED';
-      project.skipReason = `AI Bid Error: ${error.message}`;
     }
 
     // Deduplication registration
     this.state.processedProjectIds.push(project.id);
+    this.insertProject(project);
+    this.persist();
+
+    return project;
+  }
+
+  /**
+   * On-Demand Proposal Generation: Call OpenAI only when applying or testing to save tokens!
+   */
+  public async generateProposalForProject(projectId: number): Promise<FreelancerProject> {
+    let project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) {
+      throw new Error(`Project #${projectId} not found`);
+    }
+
+    if (project.generatedProposal && project.generatedProposal.trim() !== '') {
+      return project;
+    }
+
+    const config = this.state.config;
+    const aiResult = await generateProposal({
+      projectTitle: project.title,
+      projectDescription: project.description,
+      skills: (project.jobs || []).map((j: any) => (typeof j === 'string' ? j : j.name)),
+      budget: project.budget || { minimum: 20, maximum: 250, currency: 'USD' },
+      clientCountry: project.client?.country,
+      mySkills: config.freelancerSkills,
+      portfolioLinks: config.portfolioLinks,
+      ctaQuestion: config.ctaQuestion,
+      customSystemPrompt: config.systemPrompt,
+      customApiKey: config.openaiApiKey,
+      model: config.openaiModel,
+    });
+
+    project.generatedProposal = aiResult.proposal;
+    project.status = 'BID_PLACED';
+    project.bidPlacedAt = Date.now();
+    if (!project.bidAmount) {
+      project.bidAmount = Math.max(
+        project.budget.minimum,
+        Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100))
+      );
+    }
+    if (!project.bidPeriodDays) {
+      project.bidPeriodDays = config.defaultDeliveryDays;
+    }
+
+    this.state.stats.totalBidsPlaced += 1;
+
+    const bidLog: BidLog = {
+      id: `bid-${Date.now()}-${project.id}`,
+      projectId: project.id,
+      projectTitle: project.title,
+      clientUsername: project.client?.username || 'client',
+      bidAmount: project.bidAmount,
+      currency: project.budget.currency,
+      deliveryDays: project.bidPeriodDays,
+      proposal: project.generatedProposal,
+      timestamp: Date.now(),
+      status: config.dryRunMode ? 'SIMULATED' : 'SUCCESS',
+    };
+
+    this.state.bids.unshift(bidLog);
     this.insertProject(project);
     this.persist();
 

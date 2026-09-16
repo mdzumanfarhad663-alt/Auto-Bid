@@ -18,7 +18,10 @@ import {
   ChevronUp, 
   Globe,
   Rss,
-  Send
+  Send,
+  Loader2,
+  Zap,
+  CheckCircle
 } from 'lucide-react';
 
 interface LiveScannerFeedProps {
@@ -26,6 +29,7 @@ interface LiveScannerFeedProps {
   config?: FilterConfig;
   onTestProject: (project: FreelancerProject) => void;
   onClearHistory: () => void;
+  onProjectUpdate?: (project: FreelancerProject) => void;
 }
 
 export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
@@ -33,12 +37,15 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
   config,
   onTestProject,
   onClearHistory,
+  onProjectUpdate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'BID_PLACED' | 'SKIPPED'>('ALL');
   const [expandedProposalId, setExpandedProposalId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [appliedId, setAppliedId] = useState<number | null>(null);
+  const [generatingId, setGeneratingId] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ title: string; desc: string } | null>(null);
 
   const filteredProjects = projects.filter((p) => {
     if (statusFilter === 'BID_PLACED' && p.status !== 'BID_PLACED') return false;
@@ -58,14 +65,62 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleApplyOnFreelancer = (project: FreelancerProject) => {
-    if (project.generatedProposal) {
-      navigator.clipboard.writeText(project.generatedProposal);
-      setAppliedId(project.id);
-      setTimeout(() => setAppliedId(null), 3000);
+  const handleApplyOnFreelancer = async (project: FreelancerProject) => {
+    let proposal = project.generatedProposal;
+    let bidAmount = project.bidAmount || project.budget.minimum;
+    let bidPeriod = project.bidPeriodDays || config?.defaultDeliveryDays || 3;
+
+    // If on-demand mode and proposal not yet generated, call OpenAI now!
+    if (!proposal || proposal.trim() === '') {
+      setGeneratingId(project.id);
+      try {
+        const res = await fetch(`/api/projects/${project.id}/prepare-bid`, {
+          method: 'POST',
+        });
+        const data = await res.json();
+        if (data.success && data.proposal) {
+          proposal = data.proposal;
+          bidAmount = data.bidAmount || bidAmount;
+          bidPeriod = data.bidPeriodDays || bidPeriod;
+          onProjectUpdate?.(data.project);
+        } else {
+          throw new Error(data.error || 'Failed to generate AI proposal');
+        }
+      } catch (err: any) {
+        console.error('Error generating bid on demand:', err);
+        setToastMessage({
+          title: 'Proposal Notice',
+          desc: err.message || 'Could not generate proposal. Opening project page directly.',
+        });
+        setTimeout(() => setToastMessage(null), 4000);
+      } finally {
+        setGeneratingId(null);
+      }
     }
-    const url = project.url || `https://www.freelancer.com/projects/${project.id}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+
+    if (proposal) {
+      navigator.clipboard.writeText(proposal);
+    }
+    setAppliedId(project.id);
+    setTimeout(() => setAppliedId(null), 3000);
+
+    const baseUrl = project.url || `https://www.freelancer.com/projects/${project.id}`;
+    const cleanBaseUrl = baseUrl.split('#')[0];
+    
+    // Hash parameters that our Chrome Extension content script detects to autofill description, amount & period
+    const hashParams = new URLSearchParams();
+    if (proposal) hashParams.set('autobid_p', encodeURIComponent(proposal));
+    if (bidAmount) hashParams.set('amount', String(bidAmount));
+    if (bidPeriod) hashParams.set('period', String(bidPeriod));
+
+    const finalUrl = `${cleanBaseUrl}#${hashParams.toString()}`;
+    window.open(finalUrl, '_blank', 'noopener,noreferrer');
+
+    setToastMessage({
+      title: 'AutoBid Dispatched!',
+      desc: `Proposal generated ($${bidAmount}, ${bidPeriod} days delivery) & transferred to tab. AutoBid extension will fill fields on Freelancer.com!`,
+    });
+    setTimeout(() => setToastMessage(null), 6000);
   };
 
   const toggleProposal = (id: number) => {
@@ -74,6 +129,25 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Dynamic Toast Banner */}
+      {toastMessage && (
+        <div className="bg-emerald-950/90 border border-emerald-500/60 rounded-xl p-3.5 flex items-start justify-between gap-3 text-xs text-emerald-200 shadow-lg shadow-emerald-950/50 transition animate-in fade-in">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold text-white">{toastMessage.title}</div>
+              <div className="text-emerald-300 mt-0.5">{toastMessage.desc}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-400 hover:text-white font-bold text-sm shrink-0"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Public Feed Status Notice */}
       <div className="bg-indigo-950/40 border border-indigo-800/40 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-indigo-200">
         <div className="flex items-center gap-2">
@@ -186,10 +260,17 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-[11px] font-mono text-slate-500">#{project.id}</span>
                       {isBidPlaced ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          <CheckCircle2 className="h-3 w-3" />
-                          PROPOSAL READY (${project.bidAmount} {project.budget.currency})
-                        </span>
+                        project.generatedProposal ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <CheckCircle2 className="h-3 w-3" />
+                            PROPOSAL READY (${project.bidAmount} {project.budget.currency})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                            <Sparkles className="h-3 w-3 text-sky-400" />
+                            QUALIFIED (${project.bidAmount || Math.round(project.budget.maximum * 0.85)} {project.budget.currency})
+                          </span>
+                        )
                       ) : isSkipped ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30">
                           <XCircle className="h-3 w-3" />
@@ -224,23 +305,49 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                     </h3>
                   </div>
 
-                  {/* Quick Action to Test Proposal on this Job or Apply */}
+                  {/* Quick Action to Apply or Test Proposal */}
                   <div className="flex items-center gap-2">
-                    {isBidPlaced && project.generatedProposal && (
+                    {isBidPlaced && (
                       <button
                         onClick={() => handleApplyOnFreelancer(project)}
-                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm transition"
-                        title="Copy proposal to clipboard and open Freelancer project in new tab"
+                        disabled={generatingId === project.id}
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold shadow-sm transition ${
+                          appliedId === project.id
+                            ? 'bg-emerald-700 text-white'
+                            : generatingId === project.id
+                            ? 'bg-indigo-700 text-white cursor-wait animate-pulse'
+                            : project.generatedProposal
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white shadow-sky-900/30'
+                        }`}
+                        title="Generate proposal & autofill Freelancer form"
                       >
-                        <Send className="h-3 w-3" />
-                        <span className="hidden sm:inline">
-                          {appliedId === project.id ? 'Copied & Opened!' : '1-Click Apply'}
-                        </span>
+                        {generatingId === project.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Generating AI...</span>
+                          </>
+                        ) : appliedId === project.id ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-300" />
+                            <span>Filled &amp; Opened!</span>
+                          </>
+                        ) : project.generatedProposal ? (
+                          <>
+                            <Send className="h-3.5 w-3.5" />
+                            <span>1-Click Apply</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
+                            <span>1-Click Apply</span>
+                          </>
+                        )}
                       </button>
                     )}
                     <button
                       onClick={() => onTestProject(project)}
-                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition"
+                      className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition"
                       title="Test OpenAI prompt generation for this job"
                     >
                       <Sparkles className="h-3 w-3 text-indigo-400" />
@@ -323,7 +430,7 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                   </div>
                 )}
 
-                {/* If Bid Placed: AI Proposal Dropdown / Box */}
+                {/* If Bid Placed & AI Proposal Ready: Dropdown / Box */}
                 {isBidPlaced && project.generatedProposal && (
                   <div className="mt-3 border-t border-emerald-900/50 pt-3">
                     <div className="flex items-center justify-between mb-2">
@@ -358,7 +465,7 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                           className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded bg-emerald-700/80 hover:bg-emerald-600 text-white font-medium transition"
                         >
                           <ExternalLink className="h-3 w-3" />
-                          <span>Open &amp; Apply</span>
+                          <span>Open &amp; Autofill</span>
                         </button>
                       </div>
                     </div>
@@ -368,6 +475,35 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                         {project.generatedProposal}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* If Bid Placed but Proposal NOT yet generated (On-Demand Token Economy Mode) */}
+                {isBidPlaced && !project.generatedProposal && (
+                  <div className="mt-3 border-t border-slate-800/80 pt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs bg-slate-950/50 p-2.5 rounded-lg border border-slate-800">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span>
+                        Token Saver Active: AI proposal will generate when you click <strong className="text-sky-300">1-Click Apply</strong> (Target: ${project.bidAmount || Math.round(project.budget.maximum * 0.85)} {project.budget.currency}, {project.bidPeriodDays || config?.defaultDeliveryDays || 3} days).
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleApplyOnFreelancer(project)}
+                      disabled={generatingId === project.id}
+                      className="self-start sm:self-auto px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium text-[11px] flex items-center gap-1 shrink-0 transition"
+                    >
+                      {generatingId === project.id ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3" />
+                          <span>Generate &amp; Apply</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>

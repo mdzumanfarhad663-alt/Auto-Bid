@@ -9,7 +9,13 @@ import {
   HelpCircle, 
   Cpu, 
   Check, 
-  Plus 
+  Plus,
+  Key,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  Zap
 } from 'lucide-react';
 
 interface AiPromptEditorProps {
@@ -27,6 +33,35 @@ export const AiPromptEditor: React.FC<AiPromptEditorProps> = ({
   const [newSkill, setNewSkill] = useState('');
   const [newPortfolio, setNewPortfolio] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [verifyingKey, setVerifyingKey] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<{ valid: boolean; message: string } | null>(null);
+
+  const handleVerifyApiKey = async () => {
+    if (!formData.openaiApiKey || formData.openaiApiKey.trim() === '') {
+      setKeyStatus({ valid: false, message: 'Please enter an OpenAI API key first.' });
+      return;
+    }
+    setVerifyingKey(true);
+    setKeyStatus(null);
+    try {
+      const res = await fetch('/api/validate-openai-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: formData.openaiApiKey }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setKeyStatus({ valid: true, message: 'Verified! Key is active and ready for live proposals.' });
+      } else {
+        setKeyStatus({ valid: false, message: data.error || 'Invalid API key.' });
+      }
+    } catch (e: any) {
+      setKeyStatus({ valid: false, message: 'Failed to connect to verification service.' });
+    } finally {
+      setVerifyingKey(false);
+    }
+  };
 
   const handleAddSkill = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,13 +147,14 @@ export const AiPromptEditor: React.FC<AiPromptEditorProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: System Prompt & Model */}
+        {/* Left Column: OpenAI API Key, System Prompt & Model */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
+          {/* OpenAI API Key & Token Saving Configuration Box */}
+          <div className="bg-slate-900/90 border border-indigo-900/60 rounded-xl p-5 space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-white flex items-center gap-2">
-                <Code2 className="h-4 w-4 text-indigo-400" />
-                System Prompt Template
+                <Key className="h-4 w-4 text-sky-400" />
+                OpenAI API Key Setting
               </label>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400">Model:</span>
@@ -132,6 +168,90 @@ export const AiPromptEditor: React.FC<AiPromptEditorProps> = ({
                   <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
                 </select>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  placeholder="sk-proj-..."
+                  value={formData.openaiApiKey || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, openaiApiKey: e.target.value });
+                    setKeyStatus(null);
+                  }}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-10 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                  title={showApiKey ? 'Hide Key' : 'Show Key'}
+                >
+                  {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleVerifyApiKey}
+                disabled={verifyingKey}
+                className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shrink-0 transition flex items-center gap-1.5"
+              >
+                {verifyingKey ? (
+                  <span>Checking...</span>
+                ) : (
+                  <>
+                    <Key className="h-3.5 w-3.5" />
+                    <span>Verify Key</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {keyStatus && (
+              <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                keyStatus.valid 
+                  ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
+                  : 'bg-rose-950/60 border border-rose-800/60 text-rose-300'
+              }`}>
+                {keyStatus.valid ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                )}
+                <span>{keyStatus.message}</span>
+              </div>
+            )}
+
+            {/* Token-Saving Mode Toggle */}
+            <div className="pt-2 border-t border-slate-800 flex items-start justify-between gap-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.generateOnDemand !== false}
+                  onChange={(e) => setFormData({ ...formData, generateOnDemand: e.target.checked })}
+                  className="mt-0.5 rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-sky-300 flex items-center gap-1">
+                    <Zap className="h-3.5 w-3.5 text-amber-400" />
+                    Token-Saving Mode (Generate On-Demand)
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    OpenAI API is called ONLY when you click &quot;1-Click Apply&quot; on a project. Saves 100% of tokens on projects you don&apos;t apply to!
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold text-white flex items-center gap-2">
+                <Code2 className="h-4 w-4 text-indigo-400" />
+                System Prompt Template
+              </label>
             </div>
 
             <p className="text-xs text-slate-400">

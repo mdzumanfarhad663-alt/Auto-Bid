@@ -217,6 +217,10 @@ export default function App() {
                 config={config}
                 onTestProject={handleOpenTesterForProject}
                 onClearHistory={handleClearHistory}
+                onProjectUpdate={(updated) => {
+                  setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                  fetchData();
+                }}
               />
             </motion.div>
           )}

@@ -10,7 +10,13 @@ import {
   Tag, 
   Ban, 
   HelpCircle, 
-  Sparkles 
+  Sparkles,
+  Key,
+  Eye,
+  EyeOff,
+  Zap,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 interface FilterSettingsModalProps {
@@ -30,8 +36,37 @@ export const FilterSettingsModal: React.FC<FilterSettingsModalProps> = ({
   const [newMandatoryTag, setNewMandatoryTag] = useState('');
   const [newNegativeWord, setNewNegativeWord] = useState('');
   const [newPortfolioLink, setNewPortfolioLink] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [verifyingKey, setVerifyingKey] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<{ valid: boolean; message: string } | null>(null);
 
   if (!isOpen) return null;
+
+  const handleVerifyApiKey = async () => {
+    if (!formData.openaiApiKey || formData.openaiApiKey.trim() === '') {
+      setKeyStatus({ valid: false, message: 'Please enter an OpenAI API key first.' });
+      return;
+    }
+    setVerifyingKey(true);
+    setKeyStatus(null);
+    try {
+      const res = await fetch('/api/validate-openai-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: formData.openaiApiKey }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setKeyStatus({ valid: true, message: 'OpenAI API Key verified successfully!' });
+      } else {
+        setKeyStatus({ valid: false, message: data.error || 'Invalid API key.' });
+      }
+    } catch (e: any) {
+      setKeyStatus({ valid: false, message: 'Could not connect to verification endpoint.' });
+    } finally {
+      setVerifyingKey(false);
+    }
+  };
 
   const handleAddMandatory = (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,6 +410,84 @@ export const FilterSettingsModal: React.FC<FilterSettingsModalProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Section 5: OpenAI API Key & Token Conservation */}
+          <div className="bg-slate-950/60 rounded-xl p-4 border border-indigo-900/50">
+            <div className="flex items-center justify-between mb-2">
+              <label className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <Key className="h-4 w-4 text-sky-400" />
+                5. OpenAI API Key &amp; Token Economy
+              </label>
+              <select
+                value={formData.openaiModel}
+                onChange={(e) => setFormData({ ...formData, openaiModel: e.target.value })}
+                className="bg-slate-900 border border-slate-700 text-xs text-white rounded-lg px-2 py-1"
+              >
+                <option value="gpt-4o-mini">gpt-4o-mini (Fast &amp; Cheap)</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+              <div className="relative flex-1">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  placeholder="sk-proj-... (or leave blank to use OPENAI_API_KEY env)"
+                  value={formData.openaiApiKey || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, openaiApiKey: e.target.value });
+                    setKeyStatus(null);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-3 pr-10 py-1.5 text-xs font-mono text-white placeholder-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleVerifyApiKey}
+                disabled={verifyingKey}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shrink-0 flex items-center gap-1"
+              >
+                <Key className="h-3 w-3" />
+                {verifyingKey ? 'Checking...' : 'Verify'}
+              </button>
+            </div>
+
+            {keyStatus && (
+              <div className={`p-2 rounded text-xs mb-3 flex items-center gap-1.5 ${
+                keyStatus.valid ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+              }`}>
+                {keyStatus.valid ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                <span>{keyStatus.message}</span>
+              </div>
+            )}
+
+            <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.generateOnDemand !== false}
+                onChange={(e) => setFormData({ ...formData, generateOnDemand: e.target.checked })}
+                className="mt-0.5 rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0"
+              />
+              <div>
+                <span className="text-xs text-sky-300 font-semibold flex items-center gap-1">
+                  <Zap className="h-3.5 w-3.5 text-amber-400" />
+                  Generate Proposal On-Demand (Conserve Tokens)
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Proposals are generated ONLY when you click &quot;1-Click Apply&quot;. This prevents consuming API tokens on projects you don&apos;t choose to bid on.
+                </p>
+              </div>
+            </label>
           </div>
         </form>
 

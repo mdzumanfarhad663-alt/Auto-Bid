@@ -49,7 +49,9 @@ export interface FilterConfig {
   portfolioLinks: string[];
   ctaQuestion: string;
   systemPrompt: string;
+  openaiApiKey?: string;
   openaiModel: string;
+  generateOnDemand: boolean; // Generate proposal only when clicking 1-Click Apply to save tokens
   bidPercentageOfMaxBudget: number; // e.g. 85% of client max budget
   defaultDeliveryDays: number;
 }
@@ -79,7 +81,9 @@ RULES:
 3. Reference relevant skills: {skills}.
 4. Provide portfolio proof: {portfolio_links}.
 5. End with this technical question: "{cta_question}"`,
+  openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
+  generateOnDemand: true, // Saves OpenAI tokens by generating only when applying!
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
 };
