@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Freelancer AutoBid - Real-Time AI Bidder",
+  "version": "1.0.0",
+  "description": "Real-time background listener, qualification filter, and gpt-4o-mini auto-bidder for Freelancer.com.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.freelancer.com/*",
+    "https://api.openai.com/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Freelancer AutoBid Controller",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

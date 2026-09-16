@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Freelancer AutoBid</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { width: 340px; background: #0f172a; color: #f8fafc; padding: 16px; font-size: 13px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 12px; }
+    .brand { font-size: 15px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+    .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 9999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-active { background: #064e3b; color: #34d399; border: 1px solid #059669; }
+    .status-paused { background: #451a03; color: #fbbf24; border: 1px solid #d97706; }
+    
+    .feed-pill { background: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; border-radius: 6px; padding: 6px 10px; font-size: 11px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .feed-pill span { font-weight: 600; }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155; }
+    .stat-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+    .stat-value { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 9px 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #334155; }
+    .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; transition: .3s; border-radius: 22px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #0ea5e9; }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    .select-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 3px 6px; font-size: 11px; outline: none; }
+
+    .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+    .btn { flex: 1; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 12px; text-align: center; text-decoration: none; transition: background .15s; }
+    .btn-primary { background: #0284c7; color: white; }
+    .btn-primary:hover { background: #0369a1; }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+    .footer-note { margin-top: 10px; font-size: 11px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <span>⚡ FreelancerAutoBid</span>
+    </div>
+    <div id="statusBadge" class="status-badge status-active">ACTIVE</div>
+  </div>
+
+  <div class="feed-pill">
+    <span>📡 Freelancer Public Feed</span>
+    <span style="color: #38bdf8;">No OAuth Needed</span>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Feed Projects</div>
+      <div id="scannedCount" class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Proposals Ready</div>
+      <div id="bidsCount" class="stat-value" style="color: #34d399;">0</div>
+    </div>
+  </div>
+
+  <div class="toggle-row">
+    <div>
+      <div style="font-weight: 600;">Feed Poller</div>
+      <div style="font-size: 11px; color: #94a3b8;">Polls Freelancer public feed</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="autoBidToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <div>
+      <div style="font-weight: 600;">Poll Interval</div>
+      <div style="font-size: 11px; color: #94a3b8;">Frequency of feed scans</div>
+    </div>
+    <select id="intervalSelect" class="select-input">
+      <option value="30">Every 30s</option>
+      <option value="60">Every 1 min</option>
+    </select>
+  </div>
+
+  <div class="toggle-row">
+    <div>
+      <div style="font-weight: 600;">Desktop Notifications</div>
+      <div style="font-size: 11px; color: #94a3b8;">Popup alert on new projects</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="notifToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <div>
+      <div style="font-weight: 600;">Dry-Run Simulation</div>
+      <div style="font-size: 11px; color: #94a3b8;">Review AI proposals safely</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="dryRunToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="btn-group">
+    <button id="pollNowBtn" class="btn btn-secondary">⚡ Poll Feed Now</button>
+    <a href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Dashboard</a>
+  </div>
+
+  <div class="footer-note">
+    Connected to Local Express Hub (port 3000)
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

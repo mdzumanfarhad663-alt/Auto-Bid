@@ -1,0 +1,3823 @@
+{
+  "config": {
+    "autoBidEnabled": true,
+    "dryRunMode": true,
+    "pollIntervalSeconds": 20,
+    "feedSource": "auto",
+    "desktopNotifications": true,
+    "audioAlerts": true,
+    "mandatorySkills": [
+      "WordPress",
+      "Shopify",
+      "PHP",
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "React",
+      "Node.js",
+      "Next.js"
+    ],
+    "negativeKeywords": [
+      "Marketing",
+      "CRM",
+      "Accounting",
+      "Casino",
+      "Betting",
+      "Academic",
+      "Essay",
+      "Adult",
+      "Crypto Trading Bot"
+    ],
+    "minBudget": 50,
+    "maxBudget": 2500,
+    "allowedCurrencies": [
+      "USD",
+      "EUR",
+      "GBP",
+      "AUD",
+      "CAD"
+    ],
+    "requirePaymentVerified": true,
+    "minClientRating": 4,
+    "minClientReviews": 1,
+    "freelancerSkills": [
+      "React",
+      "Next.js",
+      "TypeScript",
+      "Node.js",
+      "WordPress",
+      "Shopify",
+      "TailwindCSS",
+      "REST APIs"
+    ],
+    "portfolioLinks": [
+      "https://github.com/my-profile",
+      "https://myportfolio.dev"
+    ],
+    "ctaQuestion": "Are you available for a quick 5-minute technical review call to confirm the timeline?",
+    "systemPrompt": "You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.\nRULES:\n1. Strict limit: UNDER 140 WORDS.\n2. Directly identify and address the client's exact problem in sentence #1. No generic greetings.\n3. Reference relevant skills: {skills}.\n4. Provide portfolio proof: {portfolio_links}.\n5. End with this technical question: \"{cta_question}\"",
+    "openaiModel": "gpt-4o-mini",
+    "bidPercentageOfMaxBudget": 85,
+    "defaultDeliveryDays": 5
+  },
+  "processedProjectIds": [
+    38920141,
+    38920142,
+    38920143,
+    38920144,
+    38920145,
+    39006660,
+    38926023,
+    39001313,
+    39000123,
+    38975377,
+    38980475,
+    38999829,
+    38925628,
+    38991090,
+    38925113,
+    38955234,
+    38967568,
+    38983611,
+    38944382,
+    38968421,
+    38994889,
+    38977799,
+    38963305,
+    39007561,
+    40713681,
+    40713638
+  ],
+  "projects": [
+    {
+      "id": 40713686,
+      "title": "Church Logo Vectorization",
+      "description": "I need a church logo converted into an EPS file for a large sign. The logo is currently in PNG forma",
+      "submitDate": 1789504717000,
+      "budget": {
+        "minimum": 10,
+        "maximum": 30,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 20,
+          "name": "Graphic Design"
+        },
+        {
+          "id": 32,
+          "name": "Logo Design"
+        },
+        {
+          "id": 57,
+          "name": "Photoshop"
+        },
+        {
+          "id": 70,
+          "name": "Illustrator"
+        },
+        {
+          "id": 1013,
+          "name": "Adobe Illustrator"
+        },
+        {
+          "id": 2152,
+          "name": "Adobe Creative Cloud"
+        },
+        {
+          "id": 2507,
+          "name": "Adobe Photoshop"
+        },
+        {
+          "id": 2717,
+          "name": "Vector Design"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/adobe-creative-cloud/Church-Logo-Vectorization",
+      "feedSource": "public_api",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713687,
+      "title": "WordPress Speed & SEO Overhaul",
+      "description": "My WordPress site needs a rapid, end-to-end tune-up so it loads lightning-fast, ranks higher, and dr",
+      "submitDate": 1789504770000,
+      "budget": {
+        "minimum": 8,
+        "maximum": 15,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 38,
+          "name": "SEO"
+        },
+        {
+          "id": 40,
+          "name": "Link Building"
+        },
+        {
+          "id": 69,
+          "name": "WordPress"
+        },
+        {
+          "id": 298,
+          "name": "Google Analytics"
+        },
+        {
+          "id": 497,
+          "name": "Analytics"
+        },
+        {
+          "id": 569,
+          "name": "Email Marketing"
+        },
+        {
+          "id": 663,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 768,
+          "name": "Mailchimp"
+        },
+        {
+          "id": 1023,
+          "name": "Digital Marketing"
+        },
+        {
+          "id": 1683,
+          "name": "Lead Generation"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/google-analytics/WordPress-Speed-SEO-Overhaul",
+      "feedSource": "public_api",
+      "skipReason": "Discarded: Blacklisted keyword match (Marketing)",
+      "matchedBlacklist": [
+        "Marketing"
+      ]
+    },
+    {
+      "id": 40712510,
+      "title": "TurboCAD to DWG Conversion Needed (URGENT)",
+      "description": "I will send you a TurboCAD (.tcw) file and simply need it converted into a clean, fully-compatible D",
+      "submitDate": 1789461233000,
+      "budget": {
+        "minimum": 10,
+        "maximum": 11,
+        "currency": "AUD"
+      },
+      "jobs": [
+        {
+          "id": 76,
+          "name": "CAD/CAM"
+        },
+        {
+          "id": 93,
+          "name": "3D Rendering"
+        },
+        {
+          "id": 271,
+          "name": "AutoCAD"
+        },
+        {
+          "id": 394,
+          "name": "3D Modelling"
+        },
+        {
+          "id": 505,
+          "name": "3D Design"
+        },
+        {
+          "id": 630,
+          "name": "3D Printing"
+        },
+        {
+          "id": 2135,
+          "name": "3D Drafting"
+        },
+        {
+          "id": 3366,
+          "name": "CAD / SolidWorks"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/cad-cam/TurboCAD-DWG-Conversion-Needed-URGENT",
+      "feedSource": "public_api",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713690,
+      "title": "Government Website With Data Management",
+      "description": "I’m building a fully-featured government site that not only informs the public but also houses a sec",
+      "submitDate": 1789504862000,
+      "budget": {
+        "minimum": 2,
+        "maximum": 10,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 3,
+          "name": "PHP"
+        },
+        {
+          "id": 17,
+          "name": "Website Design"
+        },
+        {
+          "id": 33,
+          "name": "Web Security"
+        },
+        {
+          "id": 68,
+          "name": "SQL"
+        },
+        {
+          "id": 124,
+          "name": "Microsoft Access"
+        },
+        {
+          "id": 335,
+          "name": "HTML"
+        },
+        {
+          "id": 1031,
+          "name": "Web Development"
+        },
+        {
+          "id": 1365,
+          "name": "Security"
+        },
+        {
+          "id": 1827,
+          "name": "Website Build"
+        },
+        {
+          "id": 2126,
+          "name": "Database Management"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/web-development/Government-Website-With-Data-Management",
+      "feedSource": "public_api",
+      "skipReason": "Budget too low (10 < min 50 USD)"
+    },
+    {
+      "id": 40713689,
+      "title": "Personal Brand Identity for Silvana G. Bonini - Pastry Artist ",
+      "description": "1. About the Brand\nI am looking for a designer to create the complete visual identity for my persona",
+      "submitDate": 1789504867000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "EUR"
+      },
+      "jobs": [
+        {
+          "id": 20,
+          "name": "Graphic Design"
+        },
+        {
+          "id": 32,
+          "name": "Logo Design"
+        },
+        {
+          "id": 97,
+          "name": "Branding"
+        },
+        {
+          "id": 99,
+          "name": "Typography"
+        },
+        {
+          "id": 714,
+          "name": "Package Design"
+        },
+        {
+          "id": 1013,
+          "name": "Adobe Illustrator"
+        },
+        {
+          "id": 2507,
+          "name": "Adobe Photoshop"
+        },
+        {
+          "id": 2552,
+          "name": "Social Media Post Design"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/branding/Personal-Brand-Identity-for-Silvana",
+      "feedSource": "public_api",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713692,
+      "title": "Brand Awareness on Twitter/X",
+      "description": "I’m ready to amplify my brand’s presence and conversation around it, with the spotlight firmly on so",
+      "submitDate": 1789504933000,
+      "budget": {
+        "minimum": 250,
+        "maximum": 750,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 25,
+          "name": "Internet Marketing"
+        },
+        {
+          "id": 72,
+          "name": "Twitter"
+        },
+        {
+          "id": 74,
+          "name": "Facebook Marketing"
+        },
+        {
+          "id": 663,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 1057,
+          "name": "Brand Management"
+        },
+        {
+          "id": 1069,
+          "name": "Content Strategy"
+        },
+        {
+          "id": 1083,
+          "name": "Twitter Marketing"
+        },
+        {
+          "id": 3416,
+          "name": "Community Management"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/brand-management/Brand-Awareness-Twitter",
+      "feedSource": "public_api",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713693,
+      "title": "Corporate Leadership Deck Design",
+      "description": "I’m putting together a concise leadership pack and need a PowerPoint specialist who can translate th",
+      "submitDate": 1789504985000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 80,
+          "name": "Powerpoint"
+        },
+        {
+          "id": 232,
+          "name": "Corporate Identity"
+        },
+        {
+          "id": 1383,
+          "name": "Data Visualization"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "client_feed",
+        "rating": 4.8,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/data-visualization/Corporate-Leadership-Deck-Design",
+      "feedSource": "public_api",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713667,
+      "title": "AI/API Developer for Lead Intent Platform",
+      "description": "### Looking for a Technical Specialist – AI Lead Intent Platform  We are looking for an experienced **AI/API developer or technical specialist** to take responsibility for building an **AI-powered Lead Intent Platform**",
+      "submitDate": 1789503458000,
+      "budget": {
+        "minimum": 12500,
+        "maximum": 37500,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "AI Automation"
+        },
+        {
+          "id": 2,
+          "name": "AI Chatbot Development"
+        },
+        {
+          "id": 3,
+          "name": "AI Content Creation"
+        },
+        {
+          "id": 4,
+          "name": "AI Integration"
+        },
+        {
+          "id": 5,
+          "name": "AI Model Development"
+        },
+        {
+          "id": 6,
+          "name": "API Development"
+        },
+        {
+          "id": 7,
+          "name": "Backend Development"
+        },
+        {
+          "id": 8,
+          "name": "Data Analysis"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/api-developmet/API-Developer-for-Lead-Intent.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713666,
+      "title": "Crisp Professional &#039;YouTube channel&#039; Intro",
+      "description": "I’m after a short, sweet bumper that instantly signals quality the moment viewers land on my channel. The intro should run just a few seconds, weave in my channel name, logo, and banner graphics, and rely on kinetic typography to keep the motion lively without feeling like a slideshow",
+      "submitDate": 1789503458000,
+      "budget": {
+        "minimum": 100,
+        "maximum": 400,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Adobe Premiere Pro"
+        },
+        {
+          "id": 2,
+          "name": "After Effects"
+        },
+        {
+          "id": 3,
+          "name": "Animation"
+        },
+        {
+          "id": 4,
+          "name": "Graphic Design"
+        },
+        {
+          "id": 5,
+          "name": "Kinetic Typography"
+        },
+        {
+          "id": 6,
+          "name": "Video Editing"
+        },
+        {
+          "id": 7,
+          "name": "Video Production"
+        },
+        {
+          "id": 8,
+          "name": "Video Services"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/kinetic-typography/Crisp-Professional-YouTube-channel-Intro.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713670,
+      "title": "Finalize 90% Developed Healthcare Platform [Senior Full-Stack Developer Needed to Complete &amp; Finalize Existing Healthcare Platform &ndash; Kolkata Preferred]",
+      "description": "## Senior Full-Stack Developer Needed to Complete &amp; Finalize Existing Healthcare Platform – Kolkata Preferred  We are looking for an **EXCELLENT and highly experienced Full-Stack Developer** to take over, audit, test, improve, debug, and finally complete an existing healthcare platform",
+      "submitDate": 1789503510000,
+      "budget": {
+        "minimum": 12500,
+        "maximum": 37500,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "API Integration"
+        },
+        {
+          "id": 2,
+          "name": "Database Development"
+        },
+        {
+          "id": 3,
+          "name": "Debugging"
+        },
+        {
+          "id": 4,
+          "name": "Full Stack Development"
+        },
+        {
+          "id": 5,
+          "name": "Healthcare Software"
+        },
+        {
+          "id": 6,
+          "name": "Node.js"
+        },
+        {
+          "id": 7,
+          "name": "Python"
+        },
+        {
+          "id": 8,
+          "name": "React.js"
+        },
+        {
+          "id": 9,
+          "name": "Software Testing"
+        },
+        {
+          "id": 10,
+          "name": "Web Development"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/full-stack-development/Finalize-Developed-Healthcare-Platform.html",
+      "feedSource": "rss",
+      "skipReason": "Budget exceeds ceiling (12500 > max 2500 INR)"
+    },
+    {
+      "id": 40713671,
+      "title": "Rhino Model Enhancement",
+      "description": "I'm seeking an experienced 3D modeler to refine a Rhino model for product design. The model needs work primarily in 3D modeling.  Ideal skills and experience: - Proficiency in Rhino - Strong attention",
+      "submitDate": 1789503585000,
+      "budget": {
+        "minimum": 5000,
+        "maximum": 10000,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "3D Animation"
+        },
+        {
+          "id": 2,
+          "name": "3D CAD"
+        },
+        {
+          "id": 3,
+          "name": "3D Design"
+        },
+        {
+          "id": 4,
+          "name": "3D Modelling"
+        },
+        {
+          "id": 5,
+          "name": "3D Rendering"
+        },
+        {
+          "id": 6,
+          "name": "3D Visualization"
+        },
+        {
+          "id": 7,
+          "name": "Product Design"
+        },
+        {
+          "id": 8,
+          "name": "Solidworks"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/3d-design/Rhino-Model-Enhancement.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40704537,
+      "title": "Commission-Based Export sales agent",
+      "description": "We are looking for an experienced International Sales / Export Commission Agent to generate genuine B2B buyers and importers for our FIBC / Jumbo Bags in international markets.  Product  We supply customized",
+      "submitDate": 1789503604000,
+      "budget": {
+        "minimum": 75000,
+        "maximum": 150000,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "B2B Marketing"
+        },
+        {
+          "id": 2,
+          "name": "Business Analysis"
+        },
+        {
+          "id": 3,
+          "name": "Business Development"
+        },
+        {
+          "id": 4,
+          "name": "Business Plans"
+        },
+        {
+          "id": 5,
+          "name": "Lead Generation"
+        },
+        {
+          "id": 6,
+          "name": "Market Analysis"
+        },
+        {
+          "id": 7,
+          "name": "Market Research"
+        },
+        {
+          "id": 8,
+          "name": "Sales"
+        },
+        {
+          "id": 9,
+          "name": "Sales Management"
+        },
+        {
+          "id": 10,
+          "name": "Sales Promotion"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/business-development/European-Manufactured-Goods-Client.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713638,
+      "title": "Install &amp; Configure InstanBlog+LiveKit on VPS    PRICE  ALL JOB  50$",
+      "description": "# COMPLETE INSTANBLOG + LIVEKIT INSTALLATION — WEBSITE MUST BE READY TO USE ONLINE  Hello,  I need a **complete production installation of my InstanBlog script on my Ubuntu VPS**.  I will provide my **complete InstanBlog ZIP** and VPS access",
+      "submitDate": 1789503639000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Database Management"
+        },
+        {
+          "id": 2,
+          "name": "Laravel"
+        },
+        {
+          "id": 3,
+          "name": "Linux"
+        },
+        {
+          "id": 4,
+          "name": "PHP"
+        },
+        {
+          "id": 5,
+          "name": "Redis"
+        },
+        {
+          "id": 6,
+          "name": "SSL"
+        },
+        {
+          "id": 7,
+          "name": "System Administration"
+        },
+        {
+          "id": 8,
+          "name": "VPS"
+        },
+        {
+          "id": 9,
+          "name": "Web Development"
+        },
+        {
+          "id": 10,
+          "name": "WebRTC"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/linux/Install-Configure-InstanBlog-LiveKit-VPS.html",
+      "feedSource": "rss",
+      "matchedTags": [
+        "PHP"
+      ],
+      "bidAmount": 213,
+      "bidPeriodDays": 5,
+      "generatedProposal": "I understand you need a complete production installation of InstanBlog on your Ubuntu VPS, ensuring it’s ready for immediate use. With extensive experience in Linux, PHP, and system administration, I can efficiently set up and configure your InstanBlog and LiveKit, ensuring reliable performance. \n\nMy expertise in web development and database management will guarantee a smooth integration. I have successfully managed similar projects, which you can review in my portfolio: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nI am committed to delivering high-quality results swiftly and effectively. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789505133037
+    },
+    {
+      "id": 40713672,
+      "title": "Need backlinks for website for long term",
+      "description": "I’m strengthening my site’s off-page profile and need backlinks that come exclusively from real guest posts on reputable, niche-relevant blogs. The main objective is to attract measurable referral traffic,",
+      "submitDate": 1789503729000,
+      "budget": {
+        "minimum": 1500,
+        "maximum": 12500,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Article Writing"
+        },
+        {
+          "id": 2,
+          "name": "Blog Writing"
+        },
+        {
+          "id": 3,
+          "name": "Content Marketing"
+        },
+        {
+          "id": 4,
+          "name": "Digital Marketing"
+        },
+        {
+          "id": 5,
+          "name": "Internet Marketing"
+        },
+        {
+          "id": 6,
+          "name": "Keyword Research"
+        },
+        {
+          "id": 7,
+          "name": "Link Building"
+        },
+        {
+          "id": 8,
+          "name": "SEO"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/digital-marketing/Need-backlinks-for-website-for.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713673,
+      "title": "3D Yacht Model Design",
+      "description": "I'm seeking a skilled 3D modeler to create a detailed exterior model of a custom Blackwell 54ft yacht, focusing on superstructure details. This model is intended to be 3D printed.  Requirements: - detail",
+      "submitDate": 1789503887000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "3D CAD"
+        },
+        {
+          "id": 2,
+          "name": "3D Design"
+        },
+        {
+          "id": 3,
+          "name": "3D Modelling"
+        },
+        {
+          "id": 4,
+          "name": "3D Print Design"
+        },
+        {
+          "id": 5,
+          "name": "3D Printing"
+        },
+        {
+          "id": 6,
+          "name": "3D Rendering"
+        },
+        {
+          "id": 7,
+          "name": "3D Visualization"
+        },
+        {
+          "id": 8,
+          "name": "3ds Max"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/3d-design/Yacht-Model-Design.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713674,
+      "title": "3D Service Model on Revit",
+      "description": "I need help creating a 3D sectional service model on Revit for presentation purposes. The model should depict the bathroom and service-duct portions, showing the relationships between:  - Sanitary fittings",
+      "submitDate": 1789503899000,
+      "budget": {
+        "minimum": 10,
+        "maximum": 30,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "3D Animation"
+        },
+        {
+          "id": 2,
+          "name": "3D Architecture"
+        },
+        {
+          "id": 3,
+          "name": "3D Design"
+        },
+        {
+          "id": 4,
+          "name": "3D Drafting"
+        },
+        {
+          "id": 5,
+          "name": "3D Modelling"
+        },
+        {
+          "id": 6,
+          "name": "3D Rendering"
+        },
+        {
+          "id": 7,
+          "name": "3ds Max"
+        },
+        {
+          "id": 8,
+          "name": "Revit"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/revit/Service-Model-Revit.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713677,
+      "title": "Install Meta Pixel &amp; Events",
+      "description": "I need my Meta Pixel implemented properly on a fully custom HTML / CSS / JavaScript site (no WordPress or Shopify involved). Please place the base pixel so it fires on every page, then set up event snippets",
+      "submitDate": 1789503995000,
+      "budget": {
+        "minimum": 600,
+        "maximum": 1500,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "CSS"
+        },
+        {
+          "id": 2,
+          "name": "Frontend Development"
+        },
+        {
+          "id": 3,
+          "name": "Google Analytics"
+        },
+        {
+          "id": 4,
+          "name": "HTML"
+        },
+        {
+          "id": 5,
+          "name": "JavaScript"
+        },
+        {
+          "id": 6,
+          "name": "Meta Pixel"
+        },
+        {
+          "id": 7,
+          "name": "PHP"
+        },
+        {
+          "id": 8,
+          "name": "Web Development"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/web-development/Install-Meta-Pixel-Events.html",
+      "feedSource": "rss",
+      "skipReason": "Currency not permitted (INR)"
+    },
+    {
+      "id": 40713679,
+      "title": "Composite Prototype CAD &amp; Mechatronics",
+      "description": "I’m building a one-off electromechanical rig for a video shoot and need an engineer who can turn my early concept into a fully documented, composite-cased prototype. The system ties together small motors, a microcontroller board, camera modules, a handful of sensors, and a rechargeable battery pack",
+      "submitDate": 1789504036000,
+      "budget": {
+        "minimum": 15,
+        "maximum": 25,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "3D CAD"
+        },
+        {
+          "id": 2,
+          "name": "3D Modelling"
+        },
+        {
+          "id": 3,
+          "name": "CAD / SolidWorks"
+        },
+        {
+          "id": 4,
+          "name": "CAD/CAM"
+        },
+        {
+          "id": 5,
+          "name": "Electronics"
+        },
+        {
+          "id": 6,
+          "name": "Manufacturing Design"
+        },
+        {
+          "id": 7,
+          "name": "Mechanical Engineering"
+        },
+        {
+          "id": 8,
+          "name": "Mechatronics"
+        },
+        {
+          "id": 9,
+          "name": "Product Design"
+        },
+        {
+          "id": 10,
+          "name": "Solidworks"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/3d-cad/Composite-Prototype-CAD-Mechatronics.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713678,
+      "title": "Candid Post-Elopement Photos",
+      "description": "I'm looking for a skilled photographer to capture photos of the groom and bride after our religious wedding ceremony. It will be just the two of us in front of a temple.   Photos of us as we exit the temple, and photos of us outside the temple",
+      "submitDate": 1789504044000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "CAD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Caricature & Cartoons"
+        },
+        {
+          "id": 2,
+          "name": "Creative Design"
+        },
+        {
+          "id": 3,
+          "name": "Event Photography"
+        },
+        {
+          "id": 4,
+          "name": "Event Planning"
+        },
+        {
+          "id": 5,
+          "name": "Illustration"
+        },
+        {
+          "id": 6,
+          "name": "Photo Editing"
+        },
+        {
+          "id": 7,
+          "name": "Photo Retouching"
+        },
+        {
+          "id": 8,
+          "name": "Photography"
+        },
+        {
+          "id": 9,
+          "name": "Photoshop"
+        },
+        {
+          "id": 10,
+          "name": "Visual Arts"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/photo-retouching/Candid-Post-Elopement-Photos.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713465,
+      "title": "Custom Tudor Silk Wedding Gown",
+      "description": "I'm seeking a skilled seamstress to create a Tudor-style wedding gown. The gown should be in blue and white silk, with intricate embroidery and beading. I have attached photos of the type of design Im thinking of",
+      "submitDate": 1789504090000,
+      "budget": {
+        "minimum": 750,
+        "maximum": 1500,
+        "currency": "GBP"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Costume Design"
+        },
+        {
+          "id": 2,
+          "name": "Embroidery"
+        },
+        {
+          "id": 3,
+          "name": "Fashion Consulting"
+        },
+        {
+          "id": 4,
+          "name": "Fashion Design"
+        },
+        {
+          "id": 5,
+          "name": "Fashion Modeling"
+        },
+        {
+          "id": 6,
+          "name": "Garment Construction"
+        },
+        {
+          "id": 7,
+          "name": "Local Job"
+        },
+        {
+          "id": 8,
+          "name": "Pattern Making"
+        },
+        {
+          "id": 9,
+          "name": "Sewing"
+        },
+        {
+          "id": 10,
+          "name": "Textile Design"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sewing/Custom-Tudor-Silk-Wedding-Gown.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713663,
+      "title": "Cartoon Demodex Pok&eacute;mon Cards",
+      "description": "I’m creating a playful set of Pokémon-style trading cards based on Demodex mites and need fresh, cartoonish artwork to bring them to life. Every illustration should pop with bright, vibrant colors that",
+      "submitDate": 1789504104000,
+      "budget": {
+        "minimum": 15,
+        "maximum": 25,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "2D Animation"
+        },
+        {
+          "id": 2,
+          "name": "Adobe Illustrator"
+        },
+        {
+          "id": 3,
+          "name": "Caricature & Cartoons"
+        },
+        {
+          "id": 4,
+          "name": "Character Design"
+        },
+        {
+          "id": 5,
+          "name": "Digital Art"
+        },
+        {
+          "id": 6,
+          "name": "Graphic Design"
+        },
+        {
+          "id": 7,
+          "name": "Illustration"
+        },
+        {
+          "id": 8,
+          "name": "Illustrator"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/2d-animation/Cartoon-Demodex-Pok-mon-Cards.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713665,
+      "title": "Timely Political News Reports - 15/09/2026 16:16 EDT",
+      "description": "I’m assembling a small bench of writers who can deliver crisp, accurate political news reports on demand. My own background is in journalism, so I’ll supply leads, verified sources, and the editorial angle; what I need from you is clear, impartial copy that can be published with minimal edits",
+      "submitDate": 1789504104000,
+      "budget": {
+        "minimum": 12500,
+        "maximum": 37500,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Article Writing"
+        },
+        {
+          "id": 2,
+          "name": "Content Creation"
+        },
+        {
+          "id": 3,
+          "name": "Content Writing"
+        },
+        {
+          "id": 4,
+          "name": "Copywriting"
+        },
+        {
+          "id": 5,
+          "name": "Editing"
+        },
+        {
+          "id": 6,
+          "name": "Journalism"
+        },
+        {
+          "id": 7,
+          "name": "Research"
+        },
+        {
+          "id": 8,
+          "name": "SEO Writing"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/article-writing/Timely-Political-News-Reports-EDT-40713665.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713680,
+      "title": "Python Tool: Swiss Company Leads",
+      "description": "Project Overview  I am looking for an experienced Python developer to build an automated solution for researching companies in Switzerland.  The solution will use an Excel file containing Swiss municipalities as input",
+      "submitDate": 1789504141000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "EUR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "API Development"
+        },
+        {
+          "id": 2,
+          "name": "API Integration"
+        },
+        {
+          "id": 3,
+          "name": "Data Analysis"
+        },
+        {
+          "id": 4,
+          "name": "Data Mining"
+        },
+        {
+          "id": 5,
+          "name": "Data Processing"
+        },
+        {
+          "id": 6,
+          "name": "Data Scraping"
+        },
+        {
+          "id": 7,
+          "name": "Excel"
+        },
+        {
+          "id": 8,
+          "name": "Python"
+        },
+        {
+          "id": 9,
+          "name": "Software Architecture"
+        },
+        {
+          "id": 10,
+          "name": "Web Scraping"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/Python-Tool-Swiss-Company-Leads.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40713681,
+      "title": "Desarrollo de aplicaci&oacute;n m&oacute;vil para venta de tickets de loter&iacute;a",
+      "description": "Quiero lanzar una aplicación móvil para iPhone y Android que permita a los usuarios comprar tickets de loterías nacionales e internacionales desde una interfaz moderna inspirada en DOM Lotería.    Alcance",
+      "submitDate": 1789504250000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Android"
+        },
+        {
+          "id": 2,
+          "name": "API Integration"
+        },
+        {
+          "id": 3,
+          "name": "Flutter"
+        },
+        {
+          "id": 4,
+          "name": "Graphic Design"
+        },
+        {
+          "id": 5,
+          "name": "iOS Development"
+        },
+        {
+          "id": 6,
+          "name": "iPhone"
+        },
+        {
+          "id": 7,
+          "name": "Mobile App Development"
+        },
+        {
+          "id": 8,
+          "name": "React Native"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/flutter/Desarrollo-aplicaci-vil-para-venta.html",
+      "feedSource": "rss",
+      "matchedTags": [
+        "React"
+      ],
+      "bidAmount": 213,
+      "bidPeriodDays": 5,
+      "generatedProposal": "I understand you're looking to develop a modern mobile application for purchasing lottery tickets on both iPhone and Android platforms. My expertise in React Native and API integration ensures seamless functionality and an engaging user experience. \n\nWith experience in mobile app development and a strong focus on modern UI/UX design, I can create a visually appealing interface that aligns with your vision. I have successfully completed similar projects, which you can view in my portfolio: https://myportfolio.dev and my GitHub: https://github.com/my-profile.\n\nLet's work together to bring your idea to life efficiently and effectively. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789505130951
+    },
+    {
+      "id": 40712493,
+      "title": "Structural Engineer with PE Stamp for NC Steel Frame",
+      "description": "I have already run the full structural calculations for a light-steel frame that will carry a single-steel frame in North Carolina. what I need now is a formal peer review and professional stamp from a NC PE so the package glides through local plan check",
+      "submitDate": 1789504334000,
+      "budget": {
+        "minimum": 30,
+        "maximum": 250,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Civil Engineering"
+        },
+        {
+          "id": 2,
+          "name": "Structural Engineering"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/structural-engineering/Structural-Engineer-with-Stamp-for.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 40707368,
+      "title": "Fixed-Price Project: Shopify to TikTok Shop Product Migration (50 SKUs)",
+      "description": "We are seeking a qualified freelancer to complete the migration and listing of 50 products from our Shopify store to our TikTok Shop seller account. This is a fixed-price engagement with a clearly defined scope, deliverables, and completion criteria as outlined below",
+      "submitDate": 1789504361000,
+      "budget": {
+        "minimum": 20,
+        "maximum": 250,
+        "currency": "GBP"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Content Writing"
+        },
+        {
+          "id": 2,
+          "name": "Data Entry"
+        },
+        {
+          "id": 3,
+          "name": "eBay"
+        },
+        {
+          "id": 4,
+          "name": "Excel"
+        },
+        {
+          "id": 5,
+          "name": "Market Research"
+        },
+        {
+          "id": 6,
+          "name": "Product Descriptions"
+        },
+        {
+          "id": 7,
+          "name": "SEO"
+        },
+        {
+          "id": 8,
+          "name": "Shopify"
+        },
+        {
+          "id": 9,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 10,
+          "name": "TikTok"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/shopify-site/Migrate-Optimize-TikTok-Listings.html",
+      "feedSource": "rss",
+      "skipReason": "Discarded: Blacklisted keyword match (Marketing)",
+      "matchedBlacklist": [
+        "Marketing"
+      ]
+    },
+    {
+      "id": 40708860,
+      "title": "Sell Highway-Front Plots Hyderabad",
+      "description": "I have a portfolio of DTCP-approved, RERA-registered residential and commercial open plots that front several National Highways around Hyderabad. Your task is simple and performance-driven: help me move",
+      "submitDate": 1789505916000,
+      "budget": {
+        "minimum": 25000,
+        "maximum": 30000,
+        "currency": "INR"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "Lead Generation"
+        },
+        {
+          "id": 2,
+          "name": "Lead Qualification"
+        },
+        {
+          "id": 3,
+          "name": "Market Research"
+        },
+        {
+          "id": 4,
+          "name": "Property Management"
+        },
+        {
+          "id": 5,
+          "name": "Real Estate"
+        },
+        {
+          "id": 6,
+          "name": "Sales"
+        },
+        {
+          "id": 7,
+          "name": "Sales Management"
+        }
+      ],
+      "client": {
+        "id": 0,
+        "username": "freelancer_client",
+        "rating": 4.9,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Global"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/lead-generation/Sell-Highway-Front-Plots-Hyderabad.html",
+      "feedSource": "rss",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38924379,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789505119735,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 377909,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38924379",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38968069,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789505099735,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 604166,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38968069",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 39007561,
+      "title": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "description": "We need an expert full stack developer to export 400 blog posts and products from our legacy WordPress site into a modern Next.js 14 App Router frontend with Tailwind CSS and Sanity/WP GraphQL backend. Must ensure 100 SEO preservation and 301 redirects.",
+      "submitDate": 1789505079734,
+      "budget": {
+        "minimum": 400,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "WordPress"
+        },
+        {
+          "id": 101,
+          "name": "Next.js"
+        },
+        {
+          "id": 102,
+          "name": "React"
+        },
+        {
+          "id": 103,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 104,
+          "name": "PHP"
+        },
+        {
+          "id": 105,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 837885,
+        "username": "growth_studio",
+        "rating": 4.9,
+        "reviewsCount": 31,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-39007561",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML",
+        "CSS",
+        "React",
+        "Next.js"
+      ],
+      "bidAmount": 1020,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Migrating your legacy WordPress site to a headless Next.js setup while preserving SEO and implementing 301 redirects is crucial for maintaining your online presence. I specialize in React, Next.js, and TailwindCSS, ensuring a seamless transition. With extensive experience in WordPress, I can efficiently export your 400 blog posts and products, integrating them into a modern architecture using Sanity or WP GraphQL.\n\nCheck my portfolio for similar successful projects: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). I ensure that every aspect, from data migration to frontend performance, is meticulously handled.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789505081190
+    },
+    {
+      "id": 38975222,
+      "title": "Online Casino sports betting odds predictor with Telegram bot",
+      "description": "Need a python developer to scrape live odds from gambling websites and send automated bet signals to VIP Telegram channel.",
+      "submitDate": 1789505059734,
+      "budget": {
+        "minimum": 300,
+        "maximum": 900,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Python"
+        },
+        {
+          "id": 101,
+          "name": "Casino"
+        },
+        {
+          "id": 102,
+          "name": "Telegram API"
+        },
+        {
+          "id": 103,
+          "name": "Web Scraping"
+        }
+      ],
+      "client": {
+        "id": 820047,
+        "username": "bet_signals_pro",
+        "rating": 3.5,
+        "reviewsCount": 2,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Malta"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38975222",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38963305,
+      "title": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "description": "We need an expert full stack developer to export 400 blog posts and products from our legacy WordPress site into a modern Next.js 14 App Router frontend with Tailwind CSS and Sanity/WP GraphQL backend. Must ensure 100 SEO preservation and 301 redirects.",
+      "submitDate": 1789505039733,
+      "budget": {
+        "minimum": 400,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "WordPress"
+        },
+        {
+          "id": 101,
+          "name": "Next.js"
+        },
+        {
+          "id": 102,
+          "name": "React"
+        },
+        {
+          "id": 103,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 104,
+          "name": "PHP"
+        },
+        {
+          "id": 105,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 393971,
+        "username": "growth_studio",
+        "rating": 4.9,
+        "reviewsCount": 31,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38963305",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML",
+        "CSS",
+        "React",
+        "Next.js"
+      ],
+      "bidAmount": 1020,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Migrating your legacy WordPress site to a headless Next.js and Tailwind CSS setup requires precision to ensure 100% SEO preservation and proper 301 redirects. With extensive experience in React, Next.js, and Tailwind CSS, I can seamlessly export your 400 blog posts and products while integrating a Sanity/WP GraphQL backend.\n\nI have successfully completed similar projects, showcasing my skills in my portfolio: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). My expertise also includes working with REST APIs, which will enhance the functionality of your new site.\n\nTo ensure we align on the project scope and timeline, are you available for a quick 5-minute technical review call?",
+      "bidPlacedAt": 1789505041996
+    },
+    {
+      "id": 38927703,
+      "title": "Instagram engagement automation and TikTok marketing growth hacking",
+      "description": "Looking for a growth hacker to run social media marketing campaigns and get 10k real followers on Instagram and TikTok using automated DMs and engagement pods.",
+      "submitDate": 1789505019732,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Marketing"
+        },
+        {
+          "id": 101,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 102,
+          "name": "Growth Hacking"
+        }
+      ],
+      "client": {
+        "id": 704702,
+        "username": "viral_brand",
+        "rating": 4.2,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38927703",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38977799,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504999732,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 571397,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38977799",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Your Shopify store's mobile score of 34 is a pressing issue that needs immediate attention. With extensive experience in Shopify, JavaScript, CSS, and HTML, I specialize in optimizing performance and can effectively eliminate render-blocking JS, implement lazy loading for images, and defer non-critical app scripts—all while ensuring tracking tags remain intact.\n\nMy expertise in React, Next.js, TypeScript, and REST APIs enhances my ability to deliver tailored solutions for your store. You can view my previous work here: [GitHub Portfolio](https://github.com/my-profile) and [Personal Portfolio](https://myportfolio.dev).\n\nI am committed to improving your store's performance to 90+ on Google PageSpeed. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789505001576
+    },
+    {
+      "id": 38994889,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504979731,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 583526,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38994889",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Your custom PHP ERP's bug in discount calculation and the need for an updated DOMPDF invoice template are critical issues. I specialize in PHP and MySQL, with extensive experience in fixing complex backend problems and enhancing PDF generation. My skills also extend to JavaScript, HTML, and CSS, ensuring a seamless integration of multi-currency formatting and QR code payment links into your invoices.\n\nYou can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nI am confident I can resolve these issues efficiently. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504981431
+    },
+    {
+      "id": 38968421,
+      "title": "Build responsive landing page from Figma design using HTML, Tailwind CSS, and Alpine.js",
+      "description": "We have a completed Figma file with 5 responsive breakpoints (Mobile, Tablet, Desktop). We need pixel-perfect, semantic HTML with Tailwind CSS classes and minimal Alpine.js for FAQ accordion and mobile drawer.",
+      "submitDate": 1789504959730,
+      "budget": {
+        "minimum": 180,
+        "maximum": 400,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "HTML"
+        },
+        {
+          "id": 101,
+          "name": "CSS"
+        },
+        {
+          "id": 102,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 103,
+          "name": "Figma to HTML"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 223093,
+        "username": "fintech_ventures",
+        "rating": 5,
+        "reviewsCount": 22,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Singapore"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38968421",
+      "matchedTags": [
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 340,
+      "bidPeriodDays": 5,
+      "generatedProposal": "I understand you're looking for a pixel-perfect, responsive landing page built from your Figma design, utilizing Tailwind CSS and Alpine.js. With extensive experience in HTML, CSS, and JavaScript, I can ensure the design translates seamlessly across all five breakpoints. \n\nI specialize in creating responsive layouts and have successfully completed similar projects, which you can view in my portfolio: [GitHub](https://github.com/my-profile), [Portfolio](https://myportfolio.dev). My focus is on delivering clean, semantic code and efficient user interactions with minimal JavaScript.\n\nLet’s collaborate to transform your vision into a stunning, functional landing page. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504961845
+    },
+    {
+      "id": 38944382,
+      "title": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "description": "We need an expert full stack developer to export 400 blog posts and products from our legacy WordPress site into a modern Next.js 14 App Router frontend with Tailwind CSS and Sanity/WP GraphQL backend. Must ensure 100 SEO preservation and 301 redirects.",
+      "submitDate": 1789504939729,
+      "budget": {
+        "minimum": 400,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "WordPress"
+        },
+        {
+          "id": 101,
+          "name": "Next.js"
+        },
+        {
+          "id": 102,
+          "name": "React"
+        },
+        {
+          "id": 103,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 104,
+          "name": "PHP"
+        },
+        {
+          "id": 105,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 797133,
+        "username": "growth_studio",
+        "rating": 4.9,
+        "reviewsCount": 31,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38944382",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML",
+        "CSS",
+        "React",
+        "Next.js"
+      ],
+      "bidAmount": 1020,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Migrating your legacy WordPress site to a headless Next.js architecture while ensuring SEO preservation and 301 redirects is crucial for maintaining traffic. With my expertise in React, Next.js, TailwindCSS, and REST APIs, I can efficiently export your 400 blog posts and products to a modern frontend. My experience with WordPress and GraphQL guarantees a seamless transition.\n\nYou can view my relevant work at: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev).\n\nI understand the importance of this project and am committed to delivering high-quality results. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504942257
+    },
+    {
+      "id": 38983611,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504919729,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 711502,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38983611",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Your Shopify store's mobile score of 34 is a significant issue that needs immediate attention. I specialize in optimizing Shopify stores, focusing on improving performance through Liquid and JavaScript enhancements. My expertise includes eliminating render-blocking JS, lazy-loading images, and deferring non-critical app scripts while ensuring tracking tags remain intact.\n\nWith a strong background in JavaScript, CSS, and HTML, I have successfully optimized numerous Shopify stores, achieving scores of 90+ on Google PageSpeed. You can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev).\n\nLet’s collaborate to elevate your store's performance efficiently. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504922072
+    },
+    {
+      "id": 38967568,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504899729,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 792581,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38967568",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Your issue with discount calculations and updating the DOMPDF invoice template is critical for your ERP's functionality. I specialize in PHP and MySQL, with a strong background in HTML, CSS, and JavaScript, ensuring that I can efficiently address your concerns. \n\nI have successfully implemented similar fixes and enhancements in past projects, and you can view my work here: https://github.com/my-profile and https://myportfolio.dev. My approach will focus on precise debugging and creating a seamless multi-currency format for your invoices, including QR code payment links.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504901150
+    },
+    {
+      "id": 38955234,
+      "title": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "description": "We need an expert full stack developer to export 400 blog posts and products from our legacy WordPress site into a modern Next.js 14 App Router frontend with Tailwind CSS and Sanity/WP GraphQL backend. Must ensure 100 SEO preservation and 301 redirects.",
+      "submitDate": 1789504879728,
+      "budget": {
+        "minimum": 400,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "WordPress"
+        },
+        {
+          "id": 101,
+          "name": "Next.js"
+        },
+        {
+          "id": 102,
+          "name": "React"
+        },
+        {
+          "id": 103,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 104,
+          "name": "PHP"
+        },
+        {
+          "id": 105,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 311618,
+        "username": "growth_studio",
+        "rating": 4.9,
+        "reviewsCount": 31,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38955234",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML",
+        "CSS",
+        "React",
+        "Next.js"
+      ],
+      "bidAmount": 1020,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Migrating your legacy WordPress site to a headless Next.js solution with complete SEO preservation and 301 redirects is crucial for maintaining your online presence. I specialize in React, Next.js, and Tailwind CSS, with extensive experience in WordPress and REST APIs, ensuring a smooth transition of your 400 blog posts and products.\n\nMy portfolio showcases similar projects: [GitHub](https://github.com/my-profile), [My Portfolio](https://myportfolio.dev). I can guarantee a seamless integration with Sanity/WP GraphQL for optimal performance.\n\nLet’s ensure your migration is successful and meets your expectations. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504881313
+    },
+    {
+      "id": 38925113,
+      "title": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "description": "We need an expert full stack developer to export 400 blog posts and products from our legacy WordPress site into a modern Next.js 14 App Router frontend with Tailwind CSS and Sanity/WP GraphQL backend. Must ensure 100 SEO preservation and 301 redirects.",
+      "submitDate": 1789504859729,
+      "budget": {
+        "minimum": 400,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "WordPress"
+        },
+        {
+          "id": 101,
+          "name": "Next.js"
+        },
+        {
+          "id": 102,
+          "name": "React"
+        },
+        {
+          "id": 103,
+          "name": "Tailwind CSS"
+        },
+        {
+          "id": 104,
+          "name": "PHP"
+        },
+        {
+          "id": 105,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 765761,
+        "username": "growth_studio",
+        "rating": 4.9,
+        "reviewsCount": 31,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38925113",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML",
+        "CSS",
+        "React",
+        "Next.js"
+      ],
+      "bidAmount": 1020,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Migrating your legacy WordPress site to a modern Next.js app while preserving SEO and implementing 301 redirects is critical for your project's success. With expertise in Next.js, React, Tailwind CSS, and REST APIs, I can ensure a seamless transition of your 400 blog posts and products. \n\nMy experience with headless WordPress and GraphQL backs my ability to deliver a robust solution tailored to your needs. You can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nLet’s make your migration smooth and efficient while maintaining SEO integrity. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504861512
+    },
+    {
+      "id": 38991090,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504839728,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 481719,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38991090",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Your Shopify store's mobile score dropping to 34 indicates significant performance issues caused by the recent app installations. I specialize in optimizing Shopify stores using Liquid, JavaScript, and CSS to enhance speed and user experience. With a proven track record in performance optimization, I can effectively eliminate render-blocking JS, implement lazy loading for images, and defer non-critical app scripts while ensuring that your tracking tags remain intact.\n\nI have extensive experience with technologies such as React, Next.js, TypeScript, Node.js, and TailwindCSS, which will enhance my approach to your project. You can review my past work at [my portfolio](https://myportfolio.dev) and [GitHub](https://github.com/my-profile).\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504843074
+    },
+    {
+      "id": 38958610,
+      "title": "Instagram engagement automation and TikTok marketing growth hacking",
+      "description": "Looking for a growth hacker to run social media marketing campaigns and get 10k real followers on Instagram and TikTok using automated DMs and engagement pods.",
+      "submitDate": 1789504819727,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Marketing"
+        },
+        {
+          "id": 101,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 102,
+          "name": "Growth Hacking"
+        }
+      ],
+      "client": {
+        "id": 104156,
+        "username": "viral_brand",
+        "rating": 4.2,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38958610",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38981029,
+      "title": "Instagram engagement automation and TikTok marketing growth hacking",
+      "description": "Looking for a growth hacker to run social media marketing campaigns and get 10k real followers on Instagram and TikTok using automated DMs and engagement pods.",
+      "submitDate": 1789504799728,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Marketing"
+        },
+        {
+          "id": 101,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 102,
+          "name": "Growth Hacking"
+        }
+      ],
+      "client": {
+        "id": 233990,
+        "username": "viral_brand",
+        "rating": 4.2,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38981029",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 39006543,
+      "title": "Online Casino sports betting odds predictor with Telegram bot",
+      "description": "Need a python developer to scrape live odds from gambling websites and send automated bet signals to VIP Telegram channel.",
+      "submitDate": 1789504779728,
+      "budget": {
+        "minimum": 300,
+        "maximum": 900,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Python"
+        },
+        {
+          "id": 101,
+          "name": "Casino"
+        },
+        {
+          "id": 102,
+          "name": "Telegram API"
+        },
+        {
+          "id": 103,
+          "name": "Web Scraping"
+        }
+      ],
+      "client": {
+        "id": 620440,
+        "username": "bet_signals_pro",
+        "rating": 3.5,
+        "reviewsCount": 2,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Malta"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-39006543",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38925628,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504748463,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 616825,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38925628",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504748641
+    },
+    {
+      "id": 38940015,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789504728463,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 863322,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38940015",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38950186,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789504708463,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 401671,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38950186",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38921410,
+      "title": "Online Casino sports betting odds predictor with Telegram bot",
+      "description": "Need a python developer to scrape live odds from gambling websites and send automated bet signals to VIP Telegram channel.",
+      "submitDate": 1789504688463,
+      "budget": {
+        "minimum": 300,
+        "maximum": 900,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Python"
+        },
+        {
+          "id": 101,
+          "name": "Casino"
+        },
+        {
+          "id": 102,
+          "name": "Telegram API"
+        },
+        {
+          "id": 103,
+          "name": "Web Scraping"
+        }
+      ],
+      "client": {
+        "id": 358107,
+        "username": "bet_signals_pro",
+        "rating": 3.5,
+        "reviewsCount": 2,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Malta"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38921410",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38999829,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504668461,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 548646,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38999829",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504668638
+    },
+    {
+      "id": 38980475,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504648461,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 718451,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38980475",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504648692
+    },
+    {
+      "id": 38996763,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789504628462,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 398737,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38996763",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38975377,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504593726,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 450032,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38975377",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504593960
+    },
+    {
+      "id": 38948956,
+      "title": "Instagram engagement automation and TikTok marketing growth hacking",
+      "description": "Looking for a growth hacker to run social media marketing campaigns and get 10k real followers on Instagram and TikTok using automated DMs and engagement pods.",
+      "submitDate": 1789504573726,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Marketing"
+        },
+        {
+          "id": 101,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 102,
+          "name": "Growth Hacking"
+        }
+      ],
+      "client": {
+        "id": 472285,
+        "username": "viral_brand",
+        "rating": 4.2,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38948956",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38937355,
+      "title": "Urgent homework assignment in statistics and machine learning",
+      "description": "I need someone to write my homework solutions for regression analysis assignment before midnight. Ready to pay immediately.",
+      "submitDate": 1789504553726,
+      "budget": {
+        "minimum": 25,
+        "maximum": 40,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Statistics"
+        },
+        {
+          "id": 101,
+          "name": "Homework"
+        },
+        {
+          "id": 102,
+          "name": "Academic Writing"
+        }
+      ],
+      "client": {
+        "id": 484958,
+        "username": "undergrad_99",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "United States"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38937355",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38938269,
+      "title": "Instagram engagement automation and TikTok marketing growth hacking",
+      "description": "Looking for a growth hacker to run social media marketing campaigns and get 10k real followers on Instagram and TikTok using automated DMs and engagement pods.",
+      "submitDate": 1789504533726,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Marketing"
+        },
+        {
+          "id": 101,
+          "name": "Social Media Marketing"
+        },
+        {
+          "id": 102,
+          "name": "Growth Hacking"
+        }
+      ],
+      "client": {
+        "id": 837209,
+        "username": "viral_brand",
+        "rating": 4.2,
+        "reviewsCount": 5,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "SKIPPED",
+      "url": "https://www.freelancer.com/projects/sample-job-38938269",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 39000123,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504513724,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 482598,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-39000123",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504513943
+    },
+    {
+      "id": 39001313,
+      "title": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "description": "Our Shopify store mobile score dropped to 34 after installing 6 apps. Need a Shopify liquid and JS performance engineer to eliminate render-blocking JS, lazyload images, and defer non-critical app scripts without breaking tracking tags.",
+      "submitDate": 1789504493723,
+      "budget": {
+        "minimum": 200,
+        "maximum": 500,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "Shopify"
+        },
+        {
+          "id": 101,
+          "name": "JavaScript"
+        },
+        {
+          "id": 102,
+          "name": "CSS"
+        },
+        {
+          "id": 103,
+          "name": "HTML"
+        },
+        {
+          "id": 104,
+          "name": "Website Optimization"
+        }
+      ],
+      "client": {
+        "id": 455284,
+        "username": "silk_cosmetics",
+        "rating": 4.8,
+        "reviewsCount": 18,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Australia"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-39001313",
+      "matchedTags": [
+        "Shopify",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 425,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504493906
+    },
+    {
+      "id": 38926023,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504473723,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 225200,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-38926023",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504473911
+    },
+    {
+      "id": 39006660,
+      "title": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "description": "Our custom PHP ERP has a bug in the discount calculation when tax is applied. We also need to update the DOMPDF invoice template to support multi-currency formatting and QR code payment links.",
+      "submitDate": 1789504453722,
+      "budget": {
+        "minimum": 150,
+        "maximum": 450,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 100,
+          "name": "PHP"
+        },
+        {
+          "id": 101,
+          "name": "MySQL"
+        },
+        {
+          "id": 102,
+          "name": "HTML"
+        },
+        {
+          "id": 103,
+          "name": "CSS"
+        },
+        {
+          "id": 104,
+          "name": "JavaScript"
+        }
+      ],
+      "client": {
+        "id": 706512,
+        "username": "logistics_hub",
+        "rating": 5,
+        "reviewsCount": 64,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "url": "https://www.freelancer.com/projects/sample-job-39006660",
+      "matchedTags": [
+        "PHP",
+        "HTML",
+        "CSS",
+        "JavaScript"
+      ],
+      "bidAmount": 383,
+      "bidPeriodDays": 5,
+      "generatedProposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "bidPlacedAt": 1789504453945
+    },
+    {
+      "id": 38920141,
+      "title": "Fix WooCommerce checkout slow loading and Stripe payment webhook error",
+      "description": "We run a high-volume WordPress WooCommerce store and since updating to WP 6.5 the checkout page takes over 8 seconds to load. Furthermore, Stripe webhooks are intermittently failing with a 500 error. Need an experienced PHP & WooCommerce specialist to debug and resolve this today.",
+      "submitDate": 1789504313067,
+      "budget": {
+        "minimum": 150,
+        "maximum": 400,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 1,
+          "name": "WordPress"
+        },
+        {
+          "id": 2,
+          "name": "PHP"
+        },
+        {
+          "id": 3,
+          "name": "WooCommerce"
+        },
+        {
+          "id": 4,
+          "name": "Stripe"
+        },
+        {
+          "id": 5,
+          "name": "HTML"
+        }
+      ],
+      "client": {
+        "id": 991204,
+        "username": "ecom_austin",
+        "rating": 4.9,
+        "reviewsCount": 28,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United States"
+      },
+      "status": "BID_PLACED",
+      "matchedTags": [
+        "WordPress",
+        "PHP",
+        "HTML"
+      ],
+      "bidAmount": 340,
+      "bidPeriodDays": 2,
+      "bidPlacedAt": 1789504338067,
+      "generatedProposal": "I reviewed your checkout latency and Stripe webhook issue. Checkout delays in WooCommerce 6.5+ are typically triggered by unindexed wp_options autoload bloat, synchronous session lockouts on order creation, or unhandled transients blocking the REST webhook worker.\n\nI specialize in high-throughput WordPress/PHP architecture. I will inspect your MySQL query locks, run Query Monitor profiles, and trace the Stripe webhook endpoint to guarantee sub-1.5s checkout flow without transaction drops.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nDo you have server error logs and staging access ready so I can trace the Stripe 500 payload right now?"
+    },
+    {
+      "id": 38920142,
+      "title": "Build automated CRM for real estate agents with cold email marketing campaign",
+      "description": "Need someone to manage our real estate marketing CRM and send out 50,000 cold emails a week. Must have experience with lead scraping, cold outreach, and sales closing.",
+      "submitDate": 1789504193067,
+      "budget": {
+        "minimum": 500,
+        "maximum": 1200,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 10,
+          "name": "CRM"
+        },
+        {
+          "id": 11,
+          "name": "Email Marketing"
+        },
+        {
+          "id": 12,
+          "name": "Lead Generation"
+        }
+      ],
+      "client": {
+        "id": 882190,
+        "username": "prime_realty",
+        "rating": 4.6,
+        "reviewsCount": 14,
+        "paymentVerified": true,
+        "identityVerified": false,
+        "country": "Canada"
+      },
+      "status": "SKIPPED",
+      "skipReason": "Discarded: Blacklisted keyword match (CRM, Marketing)",
+      "matchedBlacklist": [
+        "CRM",
+        "Marketing"
+      ]
+    },
+    {
+      "id": 38920143,
+      "title": "Custom Shopify Liquid theme section for bundle builder with discount logic",
+      "description": "Looking for a skilled Shopify developer to write a custom Liquid and vanilla JavaScript product bundle section for our Dawn 14.0 theme. Users should be able to pick 3 items and automatically receive a tiered 20% discount via Shopify Cart API.",
+      "submitDate": 1789504073067,
+      "budget": {
+        "minimum": 250,
+        "maximum": 600,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 20,
+          "name": "Shopify"
+        },
+        {
+          "id": 21,
+          "name": "Shopify Templates"
+        },
+        {
+          "id": 22,
+          "name": "JavaScript"
+        },
+        {
+          "id": 23,
+          "name": "CSS"
+        }
+      ],
+      "client": {
+        "id": 771239,
+        "username": "nordic_apparel",
+        "rating": 5,
+        "reviewsCount": 42,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "United Kingdom"
+      },
+      "status": "BID_PLACED",
+      "matchedTags": [
+        "Shopify",
+        "JavaScript",
+        "CSS"
+      ],
+      "bidAmount": 510,
+      "bidPeriodDays": 3,
+      "bidPlacedAt": 1789504123067,
+      "generatedProposal": "I analyzed your Dawn 14.0 bundle builder requirement. The cleanest way to handle tiered bundle discounts without third-party app slowdowns is combining native Liquid section schema with Shopify Cart Ajax API and line-item properties, utilizing Shopify Functions or automatic discount rules.\n\nI build clean, lightweight Shopify themes with zero dependencies and 100/100 Lighthouse performance.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nAre your products using separate variants for the bundle, or should the custom section bundle existing standalone SKUs dynamically?"
+    },
+    {
+      "id": 38920144,
+      "title": "Urgent: I need someone to write my college essay on microeconomics",
+      "description": "Need a 2000 word academic paper on supply and demand in developing nations. Must be 0% AI and passed Turnitin check.",
+      "submitDate": 1789503953067,
+      "budget": {
+        "minimum": 30,
+        "maximum": 45,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 30,
+          "name": "Academic Writing"
+        },
+        {
+          "id": 31,
+          "name": "Research"
+        }
+      ],
+      "client": {
+        "id": 661201,
+        "username": "student_92",
+        "rating": 0,
+        "reviewsCount": 0,
+        "paymentVerified": false,
+        "identityVerified": false,
+        "country": "Australia"
+      },
+      "status": "SKIPPED",
+      "skipReason": "Ineligible: Missing mandatory platform tech tags"
+    },
+    {
+      "id": 38920145,
+      "title": "Full Stack React & Node.js Developer to build real-time dashboard with WebSockets",
+      "description": "We need a senior React, TypeScript, and Node.js engineer to build a high-frequency telemetry dashboard. It streams data from IoT sensors via WebSockets, renders live line charts, and manages user auth with JWT tokens.",
+      "submitDate": 1789503833067,
+      "budget": {
+        "minimum": 800,
+        "maximum": 2000,
+        "currency": "USD"
+      },
+      "jobs": [
+        {
+          "id": 40,
+          "name": "React.js"
+        },
+        {
+          "id": 41,
+          "name": "Node.js"
+        },
+        {
+          "id": 42,
+          "name": "JavaScript"
+        },
+        {
+          "id": 43,
+          "name": "TypeScript"
+        },
+        {
+          "id": 44,
+          "name": "WebSockets"
+        }
+      ],
+      "client": {
+        "id": 551029,
+        "username": "iot_analytics_corp",
+        "rating": 4.8,
+        "reviewsCount": 19,
+        "paymentVerified": true,
+        "identityVerified": true,
+        "country": "Germany"
+      },
+      "status": "BID_PLACED",
+      "matchedTags": [
+        "React",
+        "Node.js",
+        "JavaScript"
+      ],
+      "bidAmount": 1700,
+      "bidPeriodDays": 7,
+      "bidPlacedAt": 1789503893067,
+      "generatedProposal": "I reviewed your IoT telemetry dashboard specs. The primary challenge with high-frequency WebSocket streams in React is preventing render thrashing; I solve this by offloading stream ingestion to Web Workers or RxJS buffers and rendering charts via Canvas or optimized WebGL layers.\n\nWith extensive production experience building full-stack Node.js and TypeScript architectures, I will deliver a resilient WebSocket reconnection lifecycle, secure JWT authentication, and responsive UI.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nWhat is the expected message frequency per second, and do you have a defined JSON schema for the IoT sensor payloads?"
+    }
+  ],
+  "bids": [
+    {
+      "id": "bid-1789505133037-40713638",
+      "projectId": 40713638,
+      "projectTitle": "Install &amp; Configure InstanBlog+LiveKit on VPS    PRICE  ALL JOB  50$",
+      "clientUsername": "freelancer_client",
+      "bidAmount": 213,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "I understand you need a complete production installation of InstanBlog on your Ubuntu VPS, ensuring it’s ready for immediate use. With extensive experience in Linux, PHP, and system administration, I can efficiently set up and configure your InstanBlog and LiveKit, ensuring reliable performance. \n\nMy expertise in web development and database management will guarantee a smooth integration. I have successfully managed similar projects, which you can review in my portfolio: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nI am committed to delivering high-quality results swiftly and effectively. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789505133037,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789505130951-40713681",
+      "projectId": 40713681,
+      "projectTitle": "Desarrollo de aplicaci&oacute;n m&oacute;vil para venta de tickets de loter&iacute;a",
+      "clientUsername": "freelancer_client",
+      "bidAmount": 213,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "I understand you're looking to develop a modern mobile application for purchasing lottery tickets on both iPhone and Android platforms. My expertise in React Native and API integration ensures seamless functionality and an engaging user experience. \n\nWith experience in mobile app development and a strong focus on modern UI/UX design, I can create a visually appealing interface that aligns with your vision. I have successfully completed similar projects, which you can view in my portfolio: https://myportfolio.dev and my GitHub: https://github.com/my-profile.\n\nLet's work together to bring your idea to life efficiently and effectively. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789505130951,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789505081190-39007561",
+      "projectId": 39007561,
+      "projectTitle": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "clientUsername": "growth_studio",
+      "bidAmount": 1020,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Migrating your legacy WordPress site to a headless Next.js setup while preserving SEO and implementing 301 redirects is crucial for maintaining your online presence. I specialize in React, Next.js, and TailwindCSS, ensuring a seamless transition. With extensive experience in WordPress, I can efficiently export your 400 blog posts and products, integrating them into a modern architecture using Sanity or WP GraphQL.\n\nCheck my portfolio for similar successful projects: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). I ensure that every aspect, from data migration to frontend performance, is meticulously handled.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789505081190,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789505041996-38963305",
+      "projectId": 38963305,
+      "projectTitle": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "clientUsername": "growth_studio",
+      "bidAmount": 1020,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Migrating your legacy WordPress site to a headless Next.js and Tailwind CSS setup requires precision to ensure 100% SEO preservation and proper 301 redirects. With extensive experience in React, Next.js, and Tailwind CSS, I can seamlessly export your 400 blog posts and products while integrating a Sanity/WP GraphQL backend.\n\nI have successfully completed similar projects, showcasing my skills in my portfolio: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). My expertise also includes working with REST APIs, which will enhance the functionality of your new site.\n\nTo ensure we align on the project scope and timeline, are you available for a quick 5-minute technical review call?",
+      "timestamp": 1789505041996,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789505001576-38977799",
+      "projectId": 38977799,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Your Shopify store's mobile score of 34 is a pressing issue that needs immediate attention. With extensive experience in Shopify, JavaScript, CSS, and HTML, I specialize in optimizing performance and can effectively eliminate render-blocking JS, implement lazy loading for images, and defer non-critical app scripts—all while ensuring tracking tags remain intact.\n\nMy expertise in React, Next.js, TypeScript, and REST APIs enhances my ability to deliver tailored solutions for your store. You can view my previous work here: [GitHub Portfolio](https://github.com/my-profile) and [Personal Portfolio](https://myportfolio.dev).\n\nI am committed to improving your store's performance to 90+ on Google PageSpeed. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789505001576,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504981431-38994889",
+      "projectId": 38994889,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Your custom PHP ERP's bug in discount calculation and the need for an updated DOMPDF invoice template are critical issues. I specialize in PHP and MySQL, with extensive experience in fixing complex backend problems and enhancing PDF generation. My skills also extend to JavaScript, HTML, and CSS, ensuring a seamless integration of multi-currency formatting and QR code payment links into your invoices.\n\nYou can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nI am confident I can resolve these issues efficiently. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504981431,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504961845-38968421",
+      "projectId": 38968421,
+      "projectTitle": "Build responsive landing page from Figma design using HTML, Tailwind CSS, and Alpine.js",
+      "clientUsername": "fintech_ventures",
+      "bidAmount": 340,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "I understand you're looking for a pixel-perfect, responsive landing page built from your Figma design, utilizing Tailwind CSS and Alpine.js. With extensive experience in HTML, CSS, and JavaScript, I can ensure the design translates seamlessly across all five breakpoints. \n\nI specialize in creating responsive layouts and have successfully completed similar projects, which you can view in my portfolio: [GitHub](https://github.com/my-profile), [Portfolio](https://myportfolio.dev). My focus is on delivering clean, semantic code and efficient user interactions with minimal JavaScript.\n\nLet’s collaborate to transform your vision into a stunning, functional landing page. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504961845,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504942257-38944382",
+      "projectId": 38944382,
+      "projectTitle": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "clientUsername": "growth_studio",
+      "bidAmount": 1020,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Migrating your legacy WordPress site to a headless Next.js architecture while ensuring SEO preservation and 301 redirects is crucial for maintaining traffic. With my expertise in React, Next.js, TailwindCSS, and REST APIs, I can efficiently export your 400 blog posts and products to a modern frontend. My experience with WordPress and GraphQL guarantees a seamless transition.\n\nYou can view my relevant work at: [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev).\n\nI understand the importance of this project and am committed to delivering high-quality results. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504942257,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504922072-38983611",
+      "projectId": 38983611,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Your Shopify store's mobile score of 34 is a significant issue that needs immediate attention. I specialize in optimizing Shopify stores, focusing on improving performance through Liquid and JavaScript enhancements. My expertise includes eliminating render-blocking JS, lazy-loading images, and deferring non-critical app scripts while ensuring tracking tags remain intact.\n\nWith a strong background in JavaScript, CSS, and HTML, I have successfully optimized numerous Shopify stores, achieving scores of 90+ on Google PageSpeed. You can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev).\n\nLet’s collaborate to elevate your store's performance efficiently. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504922072,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504901150-38967568",
+      "projectId": 38967568,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Your issue with discount calculations and updating the DOMPDF invoice template is critical for your ERP's functionality. I specialize in PHP and MySQL, with a strong background in HTML, CSS, and JavaScript, ensuring that I can efficiently address your concerns. \n\nI have successfully implemented similar fixes and enhancements in past projects, and you can view my work here: https://github.com/my-profile and https://myportfolio.dev. My approach will focus on precise debugging and creating a seamless multi-currency format for your invoices, including QR code payment links.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504901150,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504881313-38955234",
+      "projectId": 38955234,
+      "projectTitle": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "clientUsername": "growth_studio",
+      "bidAmount": 1020,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Migrating your legacy WordPress site to a headless Next.js solution with complete SEO preservation and 301 redirects is crucial for maintaining your online presence. I specialize in React, Next.js, and Tailwind CSS, with extensive experience in WordPress and REST APIs, ensuring a smooth transition of your 400 blog posts and products.\n\nMy portfolio showcases similar projects: [GitHub](https://github.com/my-profile), [My Portfolio](https://myportfolio.dev). I can guarantee a seamless integration with Sanity/WP GraphQL for optimal performance.\n\nLet’s ensure your migration is successful and meets your expectations. Are you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504881313,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504861512-38925113",
+      "projectId": 38925113,
+      "projectTitle": "Migrate legacy WordPress website to headless Next.js and Tailwind CSS",
+      "clientUsername": "growth_studio",
+      "bidAmount": 1020,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Migrating your legacy WordPress site to a modern Next.js app while preserving SEO and implementing 301 redirects is critical for your project's success. With expertise in Next.js, React, Tailwind CSS, and REST APIs, I can ensure a seamless transition of your 400 blog posts and products. \n\nMy experience with headless WordPress and GraphQL backs my ability to deliver a robust solution tailored to your needs. You can view my relevant work at [GitHub](https://github.com/my-profile) and [Portfolio](https://myportfolio.dev). \n\nLet’s make your migration smooth and efficient while maintaining SEO integrity. \n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504861512,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504843074-38991090",
+      "projectId": 38991090,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Your Shopify store's mobile score dropping to 34 indicates significant performance issues caused by the recent app installations. I specialize in optimizing Shopify stores using Liquid, JavaScript, and CSS to enhance speed and user experience. With a proven track record in performance optimization, I can effectively eliminate render-blocking JS, implement lazy loading for images, and defer non-critical app scripts while ensuring that your tracking tags remain intact.\n\nI have extensive experience with technologies such as React, Next.js, TypeScript, Node.js, and TailwindCSS, which will enhance my approach to your project. You can review my past work at [my portfolio](https://myportfolio.dev) and [GitHub](https://github.com/my-profile).\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504843074,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504748641-38925628",
+      "projectId": 38925628,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504748641,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504668638-38999829",
+      "projectId": 38999829,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504668638,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504648692-38980475",
+      "projectId": 38980475,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504648692,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504593960-38975377",
+      "projectId": 38975377,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504593960,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504513943-39000123",
+      "projectId": 39000123,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504513943,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504493906-39001313",
+      "projectId": 39001313,
+      "projectTitle": "Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed",
+      "clientUsername": "silk_cosmetics",
+      "bidAmount": 425,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Shopify Store Speed Optimization to 90+ Mobile on Google PageSpeed\". \n\nHaving architected multiple production applications with Shopify and JavaScript and CSS, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504493906,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504473911-38926023",
+      "projectId": 38926023,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504473911,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-1789504453945-39006660",
+      "projectId": 39006660,
+      "projectTitle": "Custom PHP & MySQL backend fix for order recalculation and PDF invoices",
+      "clientUsername": "logistics_hub",
+      "bidAmount": 383,
+      "currency": "USD",
+      "deliveryDays": 5,
+      "proposal": "Hi, I analyzed your project requirements for \"Custom PHP & MySQL backend fix for order recalculation and PDF invoices\". \n\nHaving architected multiple production applications with PHP and MySQL and HTML, I can deliver a clean, performant, and fully documented solution tailored to your timeline.\n\nI focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: https://github.com/my-profile.\n\nAre you available for a quick 5-minute technical review call to confirm the timeline?",
+      "timestamp": 1789504453945,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-38920141",
+      "projectId": 38920141,
+      "projectTitle": "Fix WooCommerce checkout slow loading and Stripe payment webhook error",
+      "clientUsername": "ecom_austin",
+      "bidAmount": 340,
+      "currency": "USD",
+      "deliveryDays": 2,
+      "proposal": "I reviewed your checkout latency and Stripe webhook issue. Checkout delays in WooCommerce 6.5+ are typically triggered by unindexed wp_options autoload bloat, synchronous session lockouts on order creation, or unhandled transients blocking the REST webhook worker.\n\nI specialize in high-throughput WordPress/PHP architecture. I will inspect your MySQL query locks, run Query Monitor profiles, and trace the Stripe webhook endpoint to guarantee sub-1.5s checkout flow without transaction drops.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nDo you have server error logs and staging access ready so I can trace the Stripe 500 payload right now?",
+      "timestamp": 1789504338067,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-38920143",
+      "projectId": 38920143,
+      "projectTitle": "Custom Shopify Liquid theme section for bundle builder with discount logic",
+      "clientUsername": "nordic_apparel",
+      "bidAmount": 510,
+      "currency": "USD",
+      "deliveryDays": 3,
+      "proposal": "I analyzed your Dawn 14.0 bundle builder requirement. The cleanest way to handle tiered bundle discounts without third-party app slowdowns is combining native Liquid section schema with Shopify Cart Ajax API and line-item properties, utilizing Shopify Functions or automatic discount rules.\n\nI build clean, lightweight Shopify themes with zero dependencies and 100/100 Lighthouse performance.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nAre your products using separate variants for the bundle, or should the custom section bundle existing standalone SKUs dynamically?",
+      "timestamp": 1789504123067,
+      "status": "SIMULATED"
+    },
+    {
+      "id": "bid-38920145",
+      "projectId": 38920145,
+      "projectTitle": "Full Stack React & Node.js Developer to build real-time dashboard with WebSockets",
+      "clientUsername": "iot_analytics_corp",
+      "bidAmount": 1700,
+      "currency": "USD",
+      "deliveryDays": 7,
+      "proposal": "I reviewed your IoT telemetry dashboard specs. The primary challenge with high-frequency WebSocket streams in React is preventing render thrashing; I solve this by offloading stream ingestion to Web Workers or RxJS buffers and rendering charts via Canvas or optimized WebGL layers.\n\nWith extensive production experience building full-stack Node.js and TypeScript architectures, I will deliver a resilient WebSocket reconnection lifecycle, secure JWT authentication, and responsive UI.\n\nPortfolio references: https://github.com/my-profile | https://myportfolio.dev\n\nWhat is the expected message frequency per second, and do you have a defined JSON schema for the IoT sensor payloads?",
+      "timestamp": 1789503893067,
+      "status": "SIMULATED"
+    }
+  ],
+  "stats": {
+    "totalScanned": 65,
+    "totalQualified": 24,
+    "totalBidsPlaced": 24,
+    "totalSkipped": 41,
+    "lastPollTimestamp": 1789505133053,
+    "skipBreakdown": {
+      "missingMandatoryTags": 35,
+      "blacklistedKeyword": 3,
+      "budgetOutOfRange": 2,
+      "unverifiedPayment": 0,
+      "lowRating": 0,
+      "alreadyProcessed": 0
+    }
+  }
+}

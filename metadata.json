@@ -1,0 +1,6 @@
+{
+  "name": "Freelancer AutoBid & Chrome Extension Hub",
+  "description": "Automated Freelancer.com bidding system with Chrome Extension Manifest V3, gpt-4o-mini proposal engine, real-time qualification filtering, and dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
