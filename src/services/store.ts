@@ -74,6 +74,18 @@ class ProjectStore {
         });
 
         const loadedConfig = { ...DEFAULT_CONFIG, ...(parsed.config || {}) };
+        if (loadedConfig.autoOpenQualified === undefined) {
+          loadedConfig.autoOpenQualified = true;
+        }
+        // Clean legacy hardcoded generic CTA question
+        if (
+          loadedConfig.ctaQuestion &&
+          (loadedConfig.ctaQuestion.includes('5-minute technical review') ||
+           loadedConfig.ctaQuestion.includes('Are you available for a quick'))
+        ) {
+          loadedConfig.ctaQuestion = '';
+        }
+
         // Ensure popular currencies like INR are included
         if (loadedConfig.allowedCurrencies && !loadedConfig.allowedCurrencies.includes('INR')) {
           loadedConfig.allowedCurrencies.push('INR', 'SGD', 'NZD', 'PHP');
@@ -332,8 +344,8 @@ class ProjectStore {
 
     const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
 
-    // If generateOnDemand is false (preemptive mode), generate proposal right away.
-    if (!config.generateOnDemand) {
+    // If AutoBid is enabled OR generateOnDemand is false, generate proposal right away
+    if (config.autoBidEnabled || !config.generateOnDemand) {
       try {
         const aiResult = await generateProposal({
           projectTitle: project.title,

@@ -25,7 +25,15 @@ export default function App() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed && typeof parsed === 'object') {
-          return { ...DEFAULT_CONFIG, ...parsed };
+          const merged = { ...DEFAULT_CONFIG, ...parsed };
+          if (
+            merged.ctaQuestion &&
+            (merged.ctaQuestion.includes('5-minute technical review') ||
+             merged.ctaQuestion.includes('Are you available for a quick'))
+          ) {
+            merged.ctaQuestion = '';
+          }
+          return merged;
         }
       }
     } catch (e) {}
@@ -84,6 +92,8 @@ export default function App() {
 
   // Fetch initial data
   const prevQualifiedCount = React.useRef(0);
+  const openedProjectIdsRef = React.useRef<Set<number>>(new Set());
+  const isInitialLoadRef = React.useRef<boolean>(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -144,7 +154,42 @@ export default function App() {
         }
         prevQualifiedCount.current = statsData.totalBidsPlaced;
       }
-      if (projectsRes.ok) setProjects(await projectsRes.json());
+      if (projectsRes.ok) {
+        const fetchedProjects: FreelancerProject[] = await projectsRes.json();
+        setProjects(fetchedProjects);
+
+        if (isInitialLoadRef.current) {
+          // On initial page load, record all existing IDs so we only auto-open newly incoming projects
+          fetchedProjects.forEach((p) => openedProjectIdsRef.current.add(p.id));
+          isInitialLoadRef.current = false;
+        } else if (currentConfig?.autoBidEnabled && currentConfig?.autoOpenQualified !== false) {
+          // For newly arrived qualified / bidded projects, auto-open tab with prefilled proposal
+          for (const p of fetchedProjects) {
+            if ((p.status === 'QUALIFIED' || p.status === 'BID_PLACED') && p.generatedProposal && !openedProjectIdsRef.current.has(p.id)) {
+              openedProjectIdsRef.current.add(p.id);
+
+              const safeBaseUrl = (p.url && !p.url.includes('sample-job') && p.id > 40000000)
+                ? `https://www.freelancer.com/projects/${p.id}`
+                : (p.url || `https://www.freelancer.com/search/projects?q=${encodeURIComponent(p.jobs?.[0]?.name || 'web development')}`);
+
+              const hashParams = new URLSearchParams();
+              if (p.generatedProposal) hashParams.set('autobid_p', p.generatedProposal);
+              hashParams.set('amount', String(p.bidAmount || p.budget?.minimum || 50));
+              hashParams.set('period', String(p.bidPeriodDays || currentConfig?.defaultDeliveryDays || 3));
+              hashParams.set('auto_submit', currentConfig?.handsFreeAutoSubmit !== false ? '1' : '0');
+              hashParams.set('autobid', '1');
+              hashParams.set('pid', String(p.id));
+
+              const targetUrl = `${safeBaseUrl}#${hashParams.toString()}`;
+              try {
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+              } catch (err) {
+                console.warn('Popup blocked or failed to open tab:', err);
+              }
+            }
+          }
+        }
+      }
       if (bidsRes.ok) setBids(await bidsRes.json());
     } catch (e) {
       console.warn('Failed to fetch dashboard data:', e);

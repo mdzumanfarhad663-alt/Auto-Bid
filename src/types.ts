@@ -97,7 +97,7 @@ export const DEFAULT_CONFIG: FilterConfig = {
   minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'PHP', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
-  ctaQuestion: 'Are you available for a quick 5-minute technical review call to confirm the timeline?',
+  ctaQuestion: '',
   systemPrompt: `OUTPUT FORMAT (follow exactly):
 
 Line 1: "Hi {client_name}," — if client name is empty, write only "Hi,"
@@ -115,6 +115,7 @@ HARD RULES:
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
+- CRITICAL LAST LINE RULE: The last line MUST be a single, intelligent technical question directly relevant to their specific project requirements (e.g. asking about their existing codebase, API version, design files, or specific architectural challenge). NEVER ask generic questions like "Are you available for a quick call?", "When can we start?", or "Are you available for a 5-minute review call?".
 - Write like a real person typing a message: short sentences, simple English, confident tone.
 - Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
 - Do not repeat the job post back word for word.
@@ -129,7 +130,7 @@ HARD RULES:
   useAiPricingAndDays: true, // Intelligently use OpenAI API to select bid amount and delivery days within client budget
   handsFreeAutoSubmit: true, // Auto-clicks 'Place Bid' button on Freelancer without human touch
   autoSubmitDelaySeconds: 2, // 2-second countdown before auto-submit
-  autoOpenQualified: false,
+  autoOpenQualified: true, // Automatically opens matched projects in a new tab for instant bidding
 };
 
 export interface BidLog {

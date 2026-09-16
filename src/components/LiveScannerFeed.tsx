@@ -147,6 +147,8 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
     if (proposal) hashParams.set('autobid_p', proposal);
     if (bidAmount) hashParams.set('amount', String(bidAmount));
     if (bidPeriod) hashParams.set('period', String(bidPeriod));
+    hashParams.set('auto_submit', config?.handsFreeAutoSubmit !== false ? '1' : '0');
+    hashParams.set('autobid', '1');
     hashParams.set('pid', String(project.id));
 
     const finalUrl = `${safeBaseUrl}#${hashParams.toString()}`;

@@ -17,12 +17,12 @@
   // Check URL hash for Autobid payload
   function parseAutoBidFromUrl() {
     const hash = window.location.hash;
-    if (!hash || !hash.includes('autobid_')) return null;
+    if (!hash || (!hash.includes('autobid') && !hash.includes('amount') && !hash.includes('period') && !hash.includes('proposal'))) return null;
 
     try {
       const cleanHash = hash.replace(/^#/, '');
       const params = new URLSearchParams(cleanHash);
-      const proposal = params.get('autobid_p') || params.get('autobid_proposal');
+      const proposal = params.get('autobid_p') || params.get('autobid_proposal') || params.get('proposal');
       const amount = params.get('amount') || params.get('bid_amount');
       const period = params.get('period') || params.get('delivery_days');
       const autoSubmit = params.get('auto_submit') === '1' || params.get('autobid') === '1' || params.get('submit') === '1';
@@ -31,13 +31,10 @@
         let safeProposal = proposal;
         if (safeProposal) {
           try {
-            // Only decode if it actually contains encoded sequences
             if (safeProposal.includes('%20') || safeProposal.includes('%0A') || safeProposal.includes('%25')) {
               safeProposal = decodeURIComponent(safeProposal);
             }
-          } catch (e) {
-            // Keep raw if decodeURIComponent throws
-          }
+          } catch (e) {}
         }
 
         return {
@@ -84,6 +81,10 @@
   function setNativeValue(element, value) {
     if (!element || value == null) return false;
 
+    try {
+      element.focus();
+    } catch (e) {}
+
     // React 16+ / Angular value setter workaround
     const prototype = Object.getPrototypeOf(element);
     const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
@@ -94,9 +95,14 @@
       element.value = value;
     }
 
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    element.dispatchEvent(new Event('blur', { bubbles: true }));
+    try {
+      element.dispatchEvent(new Event('focus', { bubbles: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+      element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+      element.dispatchEvent(new Event('blur', { bubbles: true }));
+    } catch (e) {}
     return true;
   }
 
@@ -396,22 +402,22 @@
         filledPeriod = true;
       }
 
-      // If at least description was filled, or 10 seconds passed, finish
-      if (filledDescription || (Date.now() - startTime > 10000)) {
+      // If at least description was filled, or 12 seconds passed, finish
+      if (filledDescription || (Date.now() - startTime > 12000)) {
         clearInterval(interval);
         if (filledDescription || filledAmount || filledPeriod) {
           console.log('[AutoBid] Successfully filled Freelancer bid form!');
           showAutoBidNotification(bidData);
 
-          // Clean hash from URL for cleaner look
-          if (window.location.hash.includes('autobid_')) {
+          // Clean hash from URL for clean appearance
+          if (window.location.hash && (window.location.hash.includes('autobid') || window.location.hash.includes('amount') || window.location.hash.includes('period'))) {
             try {
               window.history.replaceState(null, '', window.location.pathname + window.location.search);
             } catch (e) {}
           }
         }
       }
-    }, 400);
+    }, 350);
   }
 
   // Initialize flow

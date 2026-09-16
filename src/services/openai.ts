@@ -56,6 +56,7 @@ HARD RULES:
 - Put exactly one blank line between every section.
 - Total length under 140 words.
 - Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
+- CRITICAL CLOSING QUESTION RULE: The last line MUST be 1 single, insightful technical question based DIRECTLY on the client's problem, requirements, or tech stack described in the job post (e.g. asking about their existing API version, database schema, design files, or specific challenge). Strictly FORBIDDEN to ask generic questions like "Are you available for a quick call?", "When can we discuss this?", or "Are you available for a 5-minute review call?".
 - Write like a real person typing a message: short sentences, simple English, confident tone.
 - Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
 - Do not repeat the job post back word for word.
@@ -86,14 +87,22 @@ export async function generateProposal(params: GenerateProposalParams): Promise<
     .replace(/\{skills\}/g, params.mySkills.slice(0, 4).join(', '))
     .replace(/\{portfolio_links\}/g, params.portfolioLinks.slice(0, 2).join(' | '));
 
-  // If {cta_question} is in template, we instruct the model to generate a project-specific technical question
-  const ctaInstruction = params.ctaQuestion && params.ctaQuestion.trim()
-    ? `Use this closing question or a tailored variation: "${params.ctaQuestion}"`
-    : `Generate an intelligent, highly relevant technical question based specifically on this job post to start a conversation.`;
+  // Determine if a custom fixed CTA is provided or if dynamic AI question generation should be enforced
+  const isGenericOrEmptyCta = !params.ctaQuestion || 
+    params.ctaQuestion.trim() === '' || 
+    params.ctaQuestion.toLowerCase().includes('5-minute technical review') ||
+    params.ctaQuestion.toLowerCase().includes('quick call') ||
+    params.ctaQuestion.toLowerCase().includes('available for a quick');
+
+  const ctaInstruction = isGenericOrEmptyCta
+    ? `CRITICAL CLOSING QUESTION RULE: The last line MUST be 1 single, insightful technical question derived DIRECTLY from the client's specific problem, features, or technologies described in the job post (e.g. asking about their existing API version, database schema, design files, or specific feature requirements). NEVER use a generic sentence like "Are you available for a quick call?" or "Are you available for a 5-minute review call?".`
+    : `Use this closing question or a tailored variation derived from it: "${params.ctaQuestion}"`;
 
   baseInstruction = baseInstruction.replace(
     /\{cta_question\}/g,
-    params.ctaQuestion ? params.ctaQuestion : `[A single, smart technical question directly related to their project requirements]`
+    isGenericOrEmptyCta
+      ? `[A single, smart, highly relevant technical question derived directly from the job description and client requirements]`
+      : params.ctaQuestion!
   );
 
   const systemInstruction = `${baseInstruction}
@@ -102,7 +111,7 @@ INSTRUCTIONS FOR CLIENT NAME:
 - If client name is "${cleanClientName}" and not empty, the first line MUST be: "Hi ${cleanClientName},"
 - If client name is empty or unknown, the first line MUST be: "Hi,"
 
-INSTRUCTIONS FOR CTA QUESTION:
+INSTRUCTIONS FOR CLOSING QUESTION:
 - ${ctaInstruction}
 
 ${useAiPricing ? `
@@ -111,11 +120,11 @@ You must also evaluate the project scope, technical requirements, and deliverabl
 Select the most competitive, winning Bid Amount (STRICTLY between ${params.budget.minimum} and ${params.budget.maximum} ${params.budget.currency}) and realistic Delivery Days (e.g., 1-14 days).
 You MUST respond with valid JSON in this exact structure:
 {
-  "proposal": "<your winning proposal under 140 words strictly following the 4 paragraphs and hard rules>",
+  "proposal": "<your winning proposal under 140 words strictly following the 4 paragraphs and hard rules with the project-specific technical question as the last line>",
   "recommendedBidAmount": <number between ${params.budget.minimum} and ${params.budget.maximum}>,
   "recommendedDeliveryDays": <integer delivery days between 1 and 14>,
   "pricingReasoning": "<1 concise sentence explaining the optimal bid amount and timeframe>",
-  "ctaQuestion": "<the project-specific question you generated for the last line>"
+  "ctaQuestion": "<the project-specific question you generated for the last line based on the job details>"
 }` : ''}`;
 
   const userPrompt = `Project Title: ${params.projectTitle}
@@ -268,7 +277,30 @@ ${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposa
   const greeting = cleanClientName ? `Hi ${cleanClientName},` : `Hi,`;
   const primarySkill = params.skills[0] || params.mySkills[0] || 'web development';
   const relatedSkills = params.mySkills.slice(0, 3).join(', ');
-  const cta = params.ctaQuestion || `Are you currently using any existing tools or plugins that we should integrate with?`;
+  
+  // Dynamically tailor closing question based on project context
+  let cta = params.ctaQuestion;
+  if (isGenericOrEmptyCta) {
+    const titleLower = (params.projectTitle || '').toLowerCase();
+    const descLower = (params.projectDescription || '').toLowerCase();
+    if (titleLower.includes('wordpress') || descLower.includes('wordpress') || titleLower.includes('woocommerce')) {
+      cta = `Are you currently using any specific caching plugin or theme on this WordPress setup?`;
+    } else if (titleLower.includes('react') || titleLower.includes('next') || descLower.includes('react')) {
+      cta = `Which state management or UI library are you currently using for this React project?`;
+    } else if (titleLower.includes('api') || descLower.includes('api') || titleLower.includes('backend')) {
+      cta = `Do you already have the API specifications or documentation ready to connect with?`;
+    } else if (titleLower.includes('shopify') || descLower.includes('shopify')) {
+      cta = `Is your store using an Online Store 2.0 liquid theme or a custom headless setup?`;
+    } else if (titleLower.includes('design') || titleLower.includes('figma') || descLower.includes('figma')) {
+      cta = `Do you have the Figma designs and asset exports ready to begin implementation?`;
+    } else if (titleLower.includes('python') || titleLower.includes('scrap') || descLower.includes('scrap')) {
+      cta = `What target output format (CSV, JSON, or direct database table) do you prefer?`;
+    } else if (params.skills.length > 0) {
+      cta = `Do you have the technical specifications and repository access ready for the ${params.skills[0]} setup?`;
+    } else {
+      cta = `Do you have the detailed feature checklist or wireframes ready for this?`;
+    }
+  }
 
   const fallbackProposal = `${greeting}
 

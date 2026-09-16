@@ -41,16 +41,19 @@ const DEFAULT_CONFIG = {
   minClientRating: 4.0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
-  ctaQuestion: 'Are you available for a quick 5-minute technical review call to confirm the timeline?',
+  ctaQuestion: '',
   systemPrompt: `You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.
 RULES:
 1. Strict limit: UNDER 140 WORDS.
 2. Directly identify and address the client's exact problem in sentence #1. No generic greetings.
 3. Reference relevant skills: {skills}.
 4. Provide portfolio proof: {portfolio_links}.
-5. End with this technical question: "{cta_question}"`,
+5. CRITICAL LAST LINE: The very last line MUST be a single, intelligent technical question directly based on their specific project requirements (e.g., asking about their API version, existing codebase, theme, or design files). NEVER ask generic questions like "Are you available for a quick call?" or "When can we start?".`,
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
+  handsFreeAutoSubmit: true,
+  autoSubmitDelaySeconds: 2,
+  autoOpenQualified: true,
 };
 
 // In-memory runtime cache
@@ -136,6 +139,18 @@ async function loadStoredConfig() {
     }
   }
 
+  if (activeConfig.autoOpenQualified === undefined) {
+    activeConfig.autoOpenQualified = true;
+  }
+
+  if (
+    activeConfig.ctaQuestion &&
+    (activeConfig.ctaQuestion.includes('5-minute technical review') ||
+     activeConfig.ctaQuestion.includes('Are you available for a quick'))
+  ) {
+    activeConfig.ctaQuestion = '';
+  }
+
   if (Array.isArray(data.processedIds)) {
     processedIds = new Set(data.processedIds);
   }
@@ -207,7 +222,7 @@ async function runPollingCycle() {
       if (activeConfig.autoBidEnabled) {
         // Build direct AutoBid URL with proposal and auto_submit flag
         const autoSubmitFlag = activeConfig.handsFreeAutoSubmit !== false ? '1' : '0';
-        const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${bidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}`;
+        const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${bidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}&autobid=1&pid=${project.id}`;
         const directApplyUrl = project.url ? `${project.url}${autobidHash}` : '';
 
         if (activeConfig.dryRunMode || !activeConfig.freelancerOAuthToken) {
@@ -224,9 +239,9 @@ async function runPollingCycle() {
             );
           }
 
-          // Autonomous mode: open tab automatically if autoOpenQualified is enabled
-          if (activeConfig.autoOpenQualified && directApplyUrl) {
-            console.log('[FreelancerAutoBid] Autonomous Auto-Open triggered for project:', project.id);
+          // Autonomous mode: open tab automatically if autoOpenQualified is enabled (defaults to true)
+          if (directApplyUrl && (activeConfig.autoOpenQualified !== false)) {
+            console.log('[FreelancerAutoBid] Autonomous Auto-Open matched project in tab:', project.id, directApplyUrl);
             chrome.tabs.create({ url: directApplyUrl, active: false });
           }
         } else {
