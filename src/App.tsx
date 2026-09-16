@@ -83,6 +83,33 @@ export default function App() {
       let currentConfig: FilterConfig | null = null;
       if (configRes.ok) {
         currentConfig = await configRes.json();
+        
+        // Auto-restore saved configuration if Render redeployed with default/empty state
+        try {
+          const cachedConfigRaw = localStorage.getItem('freelancer_autobid_config');
+          if (cachedConfigRaw) {
+            const cachedConfig = JSON.parse(cachedConfigRaw);
+            if (cachedConfig && cachedConfig.mandatorySkills && cachedConfig.mandatorySkills.length > 0) {
+              // If server has default or missing customized skills/keys, sync cached config to server
+              const hasCustomizedKeys = cachedConfig.openaiApiKey || (cachedConfig.mandatorySkills?.length !== DEFAULT_CONFIG.mandatorySkills.length);
+              if (hasCustomizedKeys && (!currentConfig?.openaiApiKey || currentConfig.mandatorySkills.length === DEFAULT_CONFIG.mandatorySkills.length)) {
+                console.log('[FreelancerAutoBid] Restoring saved settings from browser cache to server...');
+                const syncRes = await fetch('/api/config', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(cachedConfig),
+                });
+                if (syncRes.ok) {
+                  const syncData = await syncRes.json();
+                  currentConfig = syncData.config;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore cache read errors
+        }
+
         setConfig(currentConfig!);
       }
       if (statsRes.ok) {
@@ -133,6 +160,11 @@ export default function App() {
   // Update configuration handler
   const handleUpdateConfig = async (updated: Partial<FilterConfig>) => {
     try {
+      const mergedConfig = { ...config, ...updated };
+      try {
+        localStorage.setItem('freelancer_autobid_config', JSON.stringify(mergedConfig));
+      } catch (err) {}
+
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,6 +173,9 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setConfig(data.config);
+        try {
+          localStorage.setItem('freelancer_autobid_config', JSON.stringify(data.config));
+        } catch (err) {}
       }
     } catch (e) {
       console.error('Failed to update config', e);

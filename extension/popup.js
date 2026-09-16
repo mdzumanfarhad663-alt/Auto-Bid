@@ -4,6 +4,9 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
   const autoBidToggle = document.getElementById('autoBidToggle');
+  const handsFreeToggle = document.getElementById('handsFreeToggle');
+  const delaySelect = document.getElementById('delaySelect');
+  const autoOpenToggle = document.getElementById('autoOpenToggle');
   const dryRunToggle = document.getElementById('dryRunToggle');
   const notifToggle = document.getElementById('notifToggle');
   const intervalSelect = document.getElementById('intervalSelect');
@@ -12,12 +15,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const bidsCount = document.getElementById('bidsCount');
   const pollNowBtn = document.getElementById('pollNowBtn');
 
-  // Load status from background service worker
+  // Load status from background service worker & storage
+  chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'autoOpenQualified'], (localData) => {
+    if (handsFreeToggle) handsFreeToggle.checked = localData.handsFreeAutoSubmit !== false;
+    if (delaySelect && localData.autoSubmitDelaySeconds !== undefined) {
+      delaySelect.value = localData.autoSubmitDelaySeconds.toString();
+    }
+    if (autoOpenToggle) autoOpenToggle.checked = !!localData.autoOpenQualified;
+  });
+
   chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (response) => {
     if (response && response.activeConfig) {
       const cfg = response.activeConfig;
       autoBidToggle.checked = !!cfg.autoBidEnabled;
       dryRunToggle.checked = !!cfg.dryRunMode;
+      if (handsFreeToggle && cfg.handsFreeAutoSubmit !== undefined) {
+        handsFreeToggle.checked = !!cfg.handsFreeAutoSubmit;
+      }
+      if (delaySelect && cfg.autoSubmitDelaySeconds !== undefined) {
+        delaySelect.value = cfg.autoSubmitDelaySeconds.toString();
+      }
+      if (autoOpenToggle && cfg.autoOpenQualified !== undefined) {
+        autoOpenToggle.checked = !!cfg.autoOpenQualified;
+      }
       if (notifToggle) notifToggle.checked = cfg.desktopNotifications !== false;
       if (intervalSelect && cfg.pollIntervalSeconds) {
         intervalSelect.value = cfg.pollIntervalSeconds >= 60 ? '60' : '30';
@@ -57,6 +77,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       config: { autoBidEnabled: enabled },
     });
   });
+
+  if (handsFreeToggle) {
+    handsFreeToggle.addEventListener('change', () => {
+      const enabled = handsFreeToggle.checked;
+      chrome.storage.local.set({ handsFreeAutoSubmit: enabled });
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONFIG',
+        config: { handsFreeAutoSubmit: enabled },
+      });
+    });
+  }
+
+  if (delaySelect) {
+    delaySelect.addEventListener('change', () => {
+      const delay = parseInt(delaySelect.value, 10) || 0;
+      chrome.storage.local.set({ autoSubmitDelaySeconds: delay });
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONFIG',
+        config: { autoSubmitDelaySeconds: delay },
+      });
+    });
+  }
+
+  if (autoOpenToggle) {
+    autoOpenToggle.addEventListener('change', () => {
+      const enabled = autoOpenToggle.checked;
+      chrome.storage.local.set({ autoOpenQualified: enabled });
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONFIG',
+        config: { autoOpenQualified: enabled },
+      });
+    });
+  }
 
   dryRunToggle.addEventListener('change', () => {
     chrome.runtime.sendMessage({

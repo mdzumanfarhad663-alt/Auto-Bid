@@ -21,16 +21,23 @@ export interface GenerateProposalParams {
   customSystemPrompt?: string;
   customApiKey?: string;
   model?: string;
+  useAiPricingAndDays?: boolean;
 }
 
-export async function generateProposal(params: GenerateProposalParams): Promise<{
+export interface ProposalGenerationResult {
   proposal: string;
   modelUsed: string;
   wordCount: number;
   tokensUsed?: number;
-}> {
+  recommendedBidAmount?: number;
+  recommendedDeliveryDays?: number;
+  pricingReasoning?: string;
+}
+
+export async function generateProposal(params: GenerateProposalParams): Promise<ProposalGenerationResult> {
   const apiKey = params.customApiKey || process.env.OPENAI_API_KEY;
   const modelName = params.model || 'gpt-4o-mini';
+  const useAiPricing = params.useAiPricingAndDays !== false;
 
   const defaultSystemPrompt = `You are an elite top 1% full-stack freelancer submitting a winning bid proposal on Freelancer.com.
 Follow these non-negotiable rules:
@@ -42,12 +49,27 @@ Follow these non-negotiable rules:
 6. TECHNICAL CTA: Conclude with a single, sharp technical question to initiate conversation: "${params.ctaQuestion || 'When are you available for a brief 5-minute technical alignment chat?'}"
 7. TONE: Confident, crisp, authoritative, engineering-focused. No fluff.`;
 
-  const systemInstruction = params.customSystemPrompt && params.customSystemPrompt.trim() !== ''
+  const baseInstruction = params.customSystemPrompt && params.customSystemPrompt.trim() !== ''
     ? params.customSystemPrompt
         .replace('{skills}', params.mySkills.join(', '))
         .replace('{portfolio_links}', params.portfolioLinks.join(', '))
         .replace('{cta_question}', params.ctaQuestion)
     : defaultSystemPrompt;
+
+  const systemInstruction = useAiPricing
+    ? `${baseInstruction}
+
+ADDITIONAL RULE FOR BID PRICING & TIMELINE:
+You must also analyze the project scope, technical complexity, and deliverables against the client's budget of ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}.
+Select the most competitive, optimal Bid Amount (STRICTLY between ${params.budget.minimum} and ${params.budget.maximum}) and realistic Delivery Days (e.g. 1-14 days).
+You MUST respond with valid JSON in this exact structure:
+{
+  "proposal": "<your winning proposal under 140 words>",
+  "recommendedBidAmount": <number between ${params.budget.minimum} and ${params.budget.maximum}>,
+  "recommendedDeliveryDays": <integer delivery days>,
+  "pricingReasoning": "<1 sentence explaining why this price & timeframe is optimal>"
+}`
+    : baseInstruction;
 
   const userPrompt = `Project Title: ${params.projectTitle}
 Budget: ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}
@@ -59,9 +81,16 @@ Project Details:
 ${params.projectDescription}
 """
 
-Generate the winning proposal now (under 150 words, high impact):`;
+${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, recommendedDeliveryDays, and pricingReasoning now:' : 'Generate the winning proposal now (under 150 words, high impact):'}`;
 
-  // 1. If OpenAI API key is configured, call OpenAI directly via fetch
+  // Default fallback bid amount & days based on budget heuristics
+  const defaultAmount = Math.max(
+    params.budget.minimum,
+    Math.round(params.budget.maximum * 0.85)
+  );
+  const defaultDays = 4;
+
+  // 1. If OpenAI API key is configured, call OpenAI directly
   if (apiKey && apiKey.trim() !== '' && !apiKey.startsWith('your_openai')) {
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -77,7 +106,8 @@ Generate the winning proposal now (under 150 words, high impact):`;
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.65,
-          max_tokens: 300,
+          max_tokens: 500,
+          response_format: useAiPricing ? { type: 'json_object' } : undefined,
         }),
       });
 
@@ -87,22 +117,52 @@ Generate the winning proposal now (under 150 words, high impact):`;
       }
 
       const data = await response.json();
-      const proposal = data.choices?.[0]?.message?.content?.trim() || '';
-      const words = proposal.split(/\s+/).filter(Boolean).length;
+      const rawText = data.choices?.[0]?.message?.content?.trim() || '';
 
+      if (useAiPricing) {
+        try {
+          const parsed = JSON.parse(rawText);
+          const proposal = parsed.proposal || rawText;
+          let bidAmount = Number(parsed.recommendedBidAmount);
+          let deliveryDays = parseInt(parsed.recommendedDeliveryDays, 10);
+
+          if (isNaN(bidAmount) || bidAmount < params.budget.minimum || bidAmount > params.budget.maximum) {
+            bidAmount = defaultAmount;
+          }
+          if (isNaN(deliveryDays) || deliveryDays < 1) {
+            deliveryDays = defaultDays;
+          }
+
+          return {
+            proposal,
+            modelUsed: modelName,
+            wordCount: proposal.split(/\s+/).filter(Boolean).length,
+            tokensUsed: data.usage?.total_tokens,
+            recommendedBidAmount: Math.round(bidAmount),
+            recommendedDeliveryDays: deliveryDays,
+            pricingReasoning: parsed.pricingReasoning || `AI-selected optimal price within ${params.budget.currency} ${params.budget.minimum}-${params.budget.maximum}`,
+          };
+        } catch (jsonErr) {
+          // If JSON parse failed, clean and use rawText
+        }
+      }
+
+      const words = rawText.split(/\s+/).filter(Boolean).length;
       return {
-        proposal,
+        proposal: rawText,
         modelUsed: modelName,
         wordCount: words,
         tokensUsed: data.usage?.total_tokens,
+        recommendedBidAmount: defaultAmount,
+        recommendedDeliveryDays: defaultDays,
       };
     } catch (err: any) {
       console.warn('OpenAI API call failed, falling back to backup generator if available:', err.message);
-      // Fall through to Gemini or rule-based fallback
+      // Fall through to Gemini or template fallback
     }
   }
 
-  // 2. Fallback to Gemini if GEMINI_API_KEY is available in AI Studio environment
+  // 2. Fallback to Gemini if GEMINI_API_KEY is available
   if (process.env.GEMINI_API_KEY) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -111,20 +171,46 @@ Generate the winning proposal now (under 150 words, high impact):`;
         contents: `${systemInstruction}\n\n${userPrompt}`,
       });
 
-      const proposal = geminiResponse.text?.trim() || '';
-      const words = proposal.split(/\s+/).filter(Boolean).length;
+      const rawText = geminiResponse.text?.trim() || '';
+      if (useAiPricing) {
+        try {
+          const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          const proposal = parsed.proposal || rawText;
+          let bidAmount = Number(parsed.recommendedBidAmount);
+          let deliveryDays = parseInt(parsed.recommendedDeliveryDays, 10);
+
+          if (isNaN(bidAmount) || bidAmount < params.budget.minimum || bidAmount > params.budget.maximum) {
+            bidAmount = defaultAmount;
+          }
+          if (isNaN(deliveryDays) || deliveryDays < 1) {
+            deliveryDays = defaultDays;
+          }
+
+          return {
+            proposal,
+            modelUsed: 'gemini-2.5-flash (OpenAI fallback)',
+            wordCount: proposal.split(/\s+/).filter(Boolean).length,
+            recommendedBidAmount: Math.round(bidAmount),
+            recommendedDeliveryDays: deliveryDays,
+            pricingReasoning: parsed.pricingReasoning || 'AI scope & budget optimization',
+          };
+        } catch (e) {}
+      }
 
       return {
-        proposal,
-        modelUsed: 'gemini-2.5-flash (OpenAI gpt-4o-mini fallback)',
-        wordCount: words,
+        proposal: rawText,
+        modelUsed: 'gemini-2.5-flash (OpenAI fallback)',
+        wordCount: rawText.split(/\s+/).filter(Boolean).length,
+        recommendedBidAmount: defaultAmount,
+        recommendedDeliveryDays: defaultDays,
       };
     } catch (gErr: any) {
       console.warn('Gemini fallback also unavailable:', gErr.message);
     }
   }
 
-  // 3. Robust template-based fallback when keys are pending configuration
+  // 3. Robust template-based fallback
   const techKeywords = params.skills.slice(0, 3).join(' and ');
   const fallbackProposal = `Hi, I analyzed your project requirements for "${params.projectTitle}". 
 
@@ -136,7 +222,9 @@ ${params.ctaQuestion || 'Could you share the repository or wireframes so I can p
 
   return {
     proposal: fallbackProposal,
-    modelUsed: 'deterministic-template-engine (Configure OPENAI_API_KEY for live gpt-4o-mini)',
+    modelUsed: 'deterministic-template-engine (Configure OPENAI_API_KEY in Settings)',
     wordCount: fallbackProposal.split(/\s+/).filter(Boolean).length,
+    recommendedBidAmount: defaultAmount,
+    recommendedDeliveryDays: defaultDays,
   };
 }

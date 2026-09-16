@@ -51,14 +51,19 @@ export interface FilterConfig {
   systemPrompt: string;
   openaiApiKey?: string;
   openaiModel: string;
+  customOpenAiModel?: string; // Free-form custom model string (e.g. gpt-5.5, gpt-5.6, sol)
   generateOnDemand: boolean; // Generate proposal only when clicking 1-Click Apply to save tokens
   bidPercentageOfMaxBudget: number; // e.g. 85% of client max budget
   defaultDeliveryDays: number;
+  useAiPricingAndDays: boolean; // Use OpenAI API to analyze scope & choose optimal budget & delivery days
+  handsFreeAutoSubmit: boolean; // Automatically click Freelancer.com 'Place Bid' button via extension
+  autoSubmitDelaySeconds: number; // Countdown seconds before auto-clicking (e.g. 2s)
+  autoOpenQualified: boolean; // Autonomously open and submit qualified projects as they arrive
 }
 
 export const DEFAULT_CONFIG: FilterConfig = {
   autoBidEnabled: true,
-  dryRunMode: true, // safe default: simulated bids until live token confirmed
+  dryRunMode: false, // Live bidding ready
   pollIntervalSeconds: 30, // Default 30s or 60s
   feedSource: 'auto', // 'auto' | 'rss' | 'public_api' - 100% No OAuth required!
   desktopNotifications: true,
@@ -98,9 +103,14 @@ RULES:
 5. End with this technical question: "{cta_question}"`,
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
+  customOpenAiModel: '',
   generateOnDemand: true, // Saves OpenAI tokens by generating only when applying!
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
+  useAiPricingAndDays: true, // Intelligently use OpenAI API to select bid amount and delivery days within client budget
+  handsFreeAutoSubmit: true, // Auto-clicks 'Place Bid' button on Freelancer without human touch
+  autoSubmitDelaySeconds: 2, // 2-second countdown before auto-submit
+  autoOpenQualified: false,
 };
 
 export interface BidLog {

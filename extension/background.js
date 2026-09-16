@@ -205,6 +205,11 @@ async function runPollingCycle() {
 
       // Submit Bid or Simulate / Dry-Run
       if (activeConfig.autoBidEnabled) {
+        // Build direct AutoBid URL with proposal and auto_submit flag
+        const autoSubmitFlag = activeConfig.handsFreeAutoSubmit !== false ? '1' : '0';
+        const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${bidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}`;
+        const directApplyUrl = project.url ? `${project.url}${autobidHash}` : '';
+
         if (activeConfig.dryRunMode || !activeConfig.freelancerOAuthToken) {
           project.status = 'BID_PLACED';
           project.bidPlacedAt = Date.now();
@@ -214,9 +219,15 @@ async function runPollingCycle() {
             showProjectNotification(
               project.id,
               `🎯 Qualified: ${project.title.slice(0, 45)}...`,
-              `Budget: ${project.budget.minimum}-${project.budget.maximum} ${project.budget.currency} | AI Proposal Ready! Click to open.`,
-              project.url
+              `Budget: ${project.budget.minimum}-${project.budget.maximum} ${project.budget.currency} | AutoBid Ready! Click to open & apply.`,
+              directApplyUrl || project.url
             );
+          }
+
+          // Autonomous mode: open tab automatically if autoOpenQualified is enabled
+          if (activeConfig.autoOpenQualified && directApplyUrl) {
+            console.log('[FreelancerAutoBid] Autonomous Auto-Open triggered for project:', project.id);
+            chrome.tabs.create({ url: directApplyUrl, active: false });
           }
         } else {
           // If real token provided, submit via Freelancer API
@@ -229,7 +240,7 @@ async function runPollingCycle() {
                 project.id,
                 `⚡ Real Bid Placed: ${project.title.slice(0, 45)}...`,
                 `Amount: ${bidAmount} ${project.budget.currency}. Click to view on Freelancer.`,
-                project.url
+                directApplyUrl || project.url
               );
             }
           } else {

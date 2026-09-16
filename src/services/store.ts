@@ -269,6 +269,20 @@ class ProjectStore {
    */
   public async processProject(rawProject: FreelancerProject): Promise<FreelancerProject> {
     const config = this.state.config;
+
+    // 1. DEDUPLICATION GUARD:
+    // If project is already stored in state, NEVER downgrade or overwrite its status!
+    // (This guarantees projects in "Bids Ready" / BID_PLACED stay there and never vanish after 30s)
+    const existing = this.state.projects.find((p) => p.id === rawProject.id);
+    if (existing) {
+      return existing;
+    }
+
+    // If ID was already processed in previous sessions, skip without polluting logs
+    if (this.state.processedProjectIds.includes(rawProject.id)) {
+      return rawProject;
+    }
+
     const project = { ...rawProject };
 
     this.state.stats.totalScanned += 1;
@@ -297,17 +311,18 @@ class ProjectStore {
         this.state.stats.skipBreakdown.alreadyProcessed += 1;
       }
 
+      this.state.processedProjectIds.push(project.id);
       this.insertProject(project);
       this.persist();
       return project;
     }
 
-    // Qualified!
+    // Qualified! Marked as BID_PLACED so it permanently resides in "Bids Ready"
     this.state.stats.totalQualified += 1;
     project.status = 'BID_PLACED';
     project.matchedTags = evaluation.matchedTags;
 
-    // Calculate smart bid amount based on percentage of client maximum budget
+    // Default bid calculation (used if AI pricing is off or as initial baseline)
     const bidAmount = Math.max(
       project.budget.minimum,
       Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100))
@@ -315,8 +330,9 @@ class ProjectStore {
     project.bidAmount = bidAmount;
     project.bidPeriodDays = config.defaultDeliveryDays;
 
+    const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
+
     // If generateOnDemand is false (preemptive mode), generate proposal right away.
-    // By default generateOnDemand is TRUE to save OpenAI tokens until the user clicks 1-Click Apply!
     if (!config.generateOnDemand) {
       try {
         const aiResult = await generateProposal({
@@ -330,10 +346,17 @@ class ProjectStore {
           ctaQuestion: config.ctaQuestion,
           customSystemPrompt: config.systemPrompt,
           customApiKey: config.openaiApiKey,
-          model: config.openaiModel,
+          model: chosenModel,
+          useAiPricingAndDays: config.useAiPricingAndDays !== false,
         });
 
         project.generatedProposal = aiResult.proposal;
+        if (aiResult.recommendedBidAmount) {
+          project.bidAmount = aiResult.recommendedBidAmount;
+        }
+        if (aiResult.recommendedDeliveryDays) {
+          project.bidPeriodDays = aiResult.recommendedDeliveryDays;
+        }
 
         if (config.autoBidEnabled) {
           const isSimulated = config.dryRunMode;
@@ -345,9 +368,9 @@ class ProjectStore {
             projectId: project.id,
             projectTitle: project.title,
             clientUsername: project.client.username,
-            bidAmount: bidAmount,
+            bidAmount: project.bidAmount,
             currency: project.budget.currency,
-            deliveryDays: config.defaultDeliveryDays,
+            deliveryDays: project.bidPeriodDays || config.defaultDeliveryDays,
             proposal: project.generatedProposal,
             timestamp: Date.now(),
             status: isSimulated ? 'SIMULATED' : 'SUCCESS',
@@ -370,7 +393,7 @@ class ProjectStore {
   }
 
   /**
-   * On-Demand Proposal Generation: Call OpenAI only when applying or testing to save tokens!
+   * On-Demand Proposal Generation: Call OpenAI with AI pricing & days selection
    */
   public async generateProposalForProject(projectId: number): Promise<FreelancerProject> {
     let project = this.state.projects.find((p) => p.id === projectId);
@@ -393,6 +416,8 @@ class ProjectStore {
     }
 
     const config = this.state.config;
+    const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
+
     const aiResult = await generateProposal({
       projectTitle: project.title,
       projectDescription: project.description,
@@ -404,19 +429,27 @@ class ProjectStore {
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: config.systemPrompt,
       customApiKey: config.openaiApiKey,
-      model: config.openaiModel,
+      model: chosenModel,
+      useAiPricingAndDays: config.useAiPricingAndDays !== false,
     });
 
     project.generatedProposal = aiResult.proposal;
     project.status = 'BID_PLACED';
     project.bidPlacedAt = Date.now();
-    if (!project.bidAmount) {
+
+    // Use AI recommended pricing and days if available, or fall back to percentage rule
+    if (aiResult.recommendedBidAmount) {
+      project.bidAmount = aiResult.recommendedBidAmount;
+    } else if (!project.bidAmount) {
       project.bidAmount = Math.max(
         project.budget.minimum,
         Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100))
       );
     }
-    if (!project.bidPeriodDays) {
+
+    if (aiResult.recommendedDeliveryDays) {
+      project.bidPeriodDays = aiResult.recommendedDeliveryDays;
+    } else if (!project.bidPeriodDays) {
       project.bidPeriodDays = config.defaultDeliveryDays;
     }
 
