@@ -22,7 +22,8 @@ import {
   Loader2,
   Zap,
   CheckCircle,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 
 interface LiveScannerFeedProps {
@@ -480,15 +481,30 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                 {/* If Bid Placed & AI Proposal Ready: Dropdown / Box */}
                 {isBidPlaced && project.generatedProposal && (
                   <div className="mt-3 border-t border-emerald-900/50 pt-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <button
-                        onClick={() => toggleProposal(project.id)}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition"
-                      >
-                        <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                        <span>AI Proposal Ready (${project.bidAmount} {project.budget.currency} • {project.bidPeriodDays} days)</span>
-                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                      </button>
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => toggleProposal(project.id)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Proposal Ready (${project.bidAmount} {project.budget.currency} • {project.bidPeriodDays} days)</span>
+                          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+
+                        {/* Clear Transparency Indicator: OpenAI vs Template */}
+                        {project.proposalSource === 'openai' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            <Sparkles className="h-2.5 w-2.5 text-emerald-400" />
+                            OpenAI API ({project.modelUsed || config?.openaiModel || 'gpt-4o-mini'})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            <AlertCircle className="h-2.5 w-2.5 text-amber-400" />
+                            Template Fallback (No OpenAI Key Configured)
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <button
@@ -517,8 +533,17 @@ export const LiveScannerFeed: React.FC<LiveScannerFeedProps> = ({
                       </div>
                     </div>
 
+                    {/* AI Pricing Analysis if provided */}
+                    {project.pricingReasoning && (
+                      <div className="mb-2 text-[11px] text-slate-300 bg-slate-950/60 border border-emerald-800/30 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                        <DollarSign className="h-3 w-3 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-400 font-semibold">AI Pricing Strategy:</span>
+                        <span>{project.pricingReasoning}</span>
+                      </div>
+                    )}
+
                     {isExpanded && (
-                      <div className="bg-slate-950/80 rounded-lg p-3 border border-emerald-500/20 text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-line shadow-inner">
+                      <div className="bg-slate-950/80 rounded-lg p-3.5 border border-emerald-500/20 text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-line shadow-inner">
                         {project.generatedProposal}
                       </div>
                     )}

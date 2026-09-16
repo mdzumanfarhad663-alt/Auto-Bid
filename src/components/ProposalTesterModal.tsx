@@ -40,6 +40,10 @@ export const ProposalTesterModal: React.FC<ProposalTesterModalProps> = ({
     proposal: string;
     wordCount: number;
     modelUsed: string;
+    proposalSource?: 'openai' | 'gemini' | 'template';
+    recommendedBidAmount?: number;
+    recommendedDeliveryDays?: number;
+    pricingReasoning?: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +89,10 @@ export const ProposalTesterModal: React.FC<ProposalTesterModalProps> = ({
         proposal: data.proposal,
         wordCount: data.wordCount || data.proposal.split(/\s+/).filter(Boolean).length,
         modelUsed: data.modelUsed || 'gpt-4o-mini',
+        proposalSource: data.proposalSource || (data.modelUsed?.includes('template') ? 'template' : 'openai'),
+        recommendedBidAmount: data.recommendedBidAmount,
+        recommendedDeliveryDays: data.recommendedDeliveryDays,
+        pricingReasoning: data.pricingReasoning,
       });
     } catch (err: any) {
       setError(err.message || 'Failed to generate proposal');
@@ -206,16 +214,26 @@ export const ProposalTesterModal: React.FC<ProposalTesterModalProps> = ({
           )}
 
           {generatedResult && (
-            <div className="space-y-2 bg-slate-950 border border-indigo-500/30 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <div className="space-y-3 bg-slate-950 border border-indigo-500/30 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-bold text-emerald-400">
                     {generatedResult.wordCount} words
                   </span>
-                  <span className="text-[10px] text-slate-400">
-                    Target: &lt;150w • {generatedResult.modelUsed}
-                  </span>
+                  
+                  {generatedResult.proposalSource === 'openai' ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      <Sparkles className="h-2.5 w-2.5 text-emerald-400" />
+                      Generated via OpenAI API ({generatedResult.modelUsed})
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      <AlertCircle className="h-2.5 w-2.5 text-amber-400" />
+                      Deterministic Template Fallback (No OpenAI Key)
+                    </span>
+                  )}
                 </div>
+
                 <button
                   onClick={handleCopy}
                   className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
@@ -233,6 +251,29 @@ export const ProposalTesterModal: React.FC<ProposalTesterModalProps> = ({
                   )}
                 </button>
               </div>
+
+              {/* AI Recommended Bid Amount & Timeline */}
+              {(generatedResult.recommendedBidAmount || generatedResult.pricingReasoning) && (
+                <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-xs space-y-1">
+                  <div className="flex items-center gap-3 font-semibold text-emerald-300">
+                    {generatedResult.recommendedBidAmount && (
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+                        AI Recommended Bid: ${generatedResult.recommendedBidAmount} {currency}
+                      </span>
+                    )}
+                    {generatedResult.recommendedDeliveryDays && (
+                      <span>• Delivery in {generatedResult.recommendedDeliveryDays} days</span>
+                    )}
+                  </div>
+                  {generatedResult.pricingReasoning && (
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                      <span className="text-emerald-400 font-medium">Scope Analysis: </span>
+                      {generatedResult.pricingReasoning}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="text-xs text-slate-200 whitespace-pre-line leading-relaxed font-sans pt-2 border-t border-slate-800">
                 {generatedResult.proposal}

@@ -23,6 +23,10 @@ export interface FreelancerProject {
   matchedTags?: string[];
   matchedBlacklist?: string[];
   generatedProposal?: string;
+  proposalSource?: 'openai' | 'gemini' | 'template';
+  modelUsed?: string;
+  pricingReasoning?: string;
+  generatedAt?: number;
   bidAmount?: number;
   bidPeriodDays?: number;
   bidPlacedAt?: number;
@@ -94,13 +98,28 @@ export const DEFAULT_CONFIG: FilterConfig = {
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'PHP', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
   ctaQuestion: 'Are you available for a quick 5-minute technical review call to confirm the timeline?',
-  systemPrompt: `You are an elite top-rated freelancer drafting a winning bid on Freelancer.com.
-RULES:
-1. Strict limit: UNDER 140 WORDS.
-2. Directly identify and address the client's exact problem in sentence #1. No generic greetings.
-3. Reference relevant skills: {skills}.
-4. Provide portfolio proof: {portfolio_links}.
-5. End with this technical question: "{cta_question}"`,
+  systemPrompt: `OUTPUT FORMAT (follow exactly):
+
+Line 1: "Hi {client_name}," — if client name is empty, write only "Hi,"
+[blank line]
+Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
+[blank line]
+Paragraph 2 (2–3 sentences): Proof. Mention a similar project I've done using {skills}, with one specific result or detail. Keep it believable and concrete.
+[blank line]
+Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job in simple steps written as a sentence.
+[blank line]
+Last line: {cta_question}
+
+HARD RULES:
+- The first word of the proposal must always be "Hi". No exceptions.
+- Put exactly one blank line between every section.
+- Total length under 140 words.
+- Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
+- Write like a real person typing a message: short sentences, simple English, confident tone.
+- Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
+- Do not repeat the job post back word for word.
+- Do not invent fake client names, fake links, or fake numbers.
+- Output only the proposal text, nothing before or after it.`,
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
   customOpenAiModel: '',

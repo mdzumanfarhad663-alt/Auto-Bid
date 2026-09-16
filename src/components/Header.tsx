@@ -25,8 +25,8 @@ interface HeaderProps {
   onUpdateConfig: (updated: Partial<FilterConfig>) => void;
   onPollNow: () => void;
   isPolling: boolean;
-  activeTab: 'feed' | 'bids' | 'rules' | 'code' | 'guide';
-  setActiveTab: (tab: 'feed' | 'bids' | 'rules' | 'code' | 'guide') => void;
+  activeTab: 'feed' | 'bids' | 'settings' | 'rules' | 'code' | 'guide';
+  setActiveTab: (tab: 'feed' | 'bids' | 'settings' | 'rules' | 'code' | 'guide') => void;
   onOpenTester: () => void;
   onOpenSettings: () => void;
 }
@@ -195,39 +195,35 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">Poll Now</span>
             </button>
 
-            {/* OpenAI API Key Quick Button */}
-            <button
-              id="header-openai-key-btn"
-              onClick={() => setActiveTab('rules')}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                config.openaiApiKey
-                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/60'
-                  : 'bg-amber-950/60 text-amber-300 border-amber-700/60 hover:bg-amber-900/60'
-              }`}
-              title={config.openaiApiKey ? 'OpenAI API Key is configured' : 'Configure OpenAI API Key'}
-            >
-              <Key className="h-3.5 w-3.5" />
-              <span className="hidden xl:inline">{config.openaiApiKey ? 'OpenAI Set' : 'OpenAI Key'}</span>
-            </button>
-
             {/* Test AI Proposal Generator */}
             <button
               id="header-test-ai-btn"
               onClick={onOpenTester}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-700/50 transition"
+              title="Test proposal generation on custom project details"
             >
               <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="hidden md:inline">Test AI Prompt</span>
+              <span className="hidden md:inline">Test Prompt</span>
             </button>
 
-            {/* Rules Modal */}
+            {/* Consolidated Master Settings Button */}
             <button
               id="header-open-settings-btn"
-              onClick={onOpenSettings}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                activeTab === 'settings' || activeTab === 'rules'
+                  ? 'bg-sky-600 text-white border-sky-500 shadow-md shadow-sky-600/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+              }`}
+              title="Open consolidated master settings: OpenAI key, Markdown rules, budget & filters"
             >
-              <Settings className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Filters</span>
+              <Settings className={`h-3.5 w-3.5 ${activeTab === 'settings' || activeTab === 'rules' ? 'text-white' : 'text-sky-400'}`} />
+              <span>Settings</span>
+              {config.openaiApiKey ? (
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+              )}
             </button>
 
             {/* Download Extension ZIP */}
@@ -266,19 +262,19 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Zap className="h-3.5 w-3.5" />
-            Bids &amp; Proposals Log
+            Bids Ready &amp; Log
           </button>
 
           <button
-            onClick={() => setActiveTab('rules')}
+            onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
-              activeTab === 'rules'
+              activeTab === 'settings' || activeTab === 'rules'
                 ? 'bg-slate-800 text-sky-400 font-semibold shadow-inner'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
             }`}
           >
-            <Settings className="h-3.5 w-3.5" />
-            Qualification &amp; AI Rules
+            <Settings className="h-3.5 w-3.5 text-sky-400" />
+            Master Settings &amp; Rules
           </button>
 
           <button

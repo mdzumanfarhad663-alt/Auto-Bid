@@ -74,6 +74,9 @@ app.post('/api/projects/:id/prepare-bid', async (req, res) => {
       success: true,
       project: updated,
       proposal: updated.generatedProposal,
+      proposalSource: updated.proposalSource,
+      modelUsed: updated.modelUsed,
+      pricingReasoning: updated.pricingReasoning,
       bidAmount: updated.bidAmount,
       bidPeriodDays: updated.bidPeriodDays,
       currency: updated.budget.currency,
@@ -168,12 +171,14 @@ app.post('/api/generate-bid', async (req, res) => {
       skills: (project.jobs || []).map((j: any) => (typeof j === 'string' ? j : j.name)),
       budget: project.budget || { minimum: 100, maximum: 500, currency: 'USD' },
       clientCountry: project.client?.country,
+      clientName: project.client?.username,
       mySkills: config.freelancerSkills,
       portfolioLinks: config.portfolioLinks,
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: customPrompt || config.systemPrompt,
-      customApiKey: customApiKey,
-      model: model || config.openaiModel,
+      customApiKey: customApiKey || config.openaiApiKey,
+      model: model || config.customOpenAiModel?.trim() || config.openaiModel,
+      useAiPricingAndDays: config.useAiPricingAndDays !== false,
     });
 
     res.json(result);

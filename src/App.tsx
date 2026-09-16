@@ -14,10 +14,24 @@ import { AiPromptEditor } from './components/AiPromptEditor.tsx';
 import { CodeExportStudio } from './components/CodeExportStudio.tsx';
 import { SetupGuide } from './components/SetupGuide.tsx';
 import { ProposalTesterModal } from './components/ProposalTesterModal.tsx';
+import { SettingsPage } from './components/SettingsPage.tsx';
 import { FilterConfig, FreelancerProject, BidLog, SystemStats, DEFAULT_CONFIG } from './types.ts';
 
 export default function App() {
-  const [config, setConfig] = useState<FilterConfig>(DEFAULT_CONFIG);
+  // Immediately read from localStorage on initial render to prevent flickering to defaults on refresh
+  const [config, setConfig] = useState<FilterConfig>(() => {
+    try {
+      const cached = localStorage.getItem('freelancer_autobid_config');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') {
+          return { ...DEFAULT_CONFIG, ...parsed };
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_CONFIG;
+  });
+
   const [stats, setStats] = useState<SystemStats>({
     totalScanned: 0,
     totalQualified: 0,
@@ -35,7 +49,7 @@ export default function App() {
   });
   const [projects, setProjects] = useState<FreelancerProject[]>([]);
   const [bids, setBids] = useState<BidLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'feed' | 'bids' | 'rules' | 'code' | 'guide'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'bids' | 'settings' | 'rules' | 'code' | 'guide'>('feed');
   const [isPolling, setIsPolling] = useState(false);
   const [pollCountdown, setPollCountdown] = useState<number>(20);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -245,7 +259,7 @@ export default function App() {
           setProjectToTest(null);
           setIsTesterModalOpen(true);
         }}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => setActiveTab('settings')}
       />
 
       {/* Main Content Area */}
@@ -289,21 +303,22 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'rules' && (
+          {(activeTab === 'settings' || activeTab === 'rules') && (
             <motion.div
-              key="rules"
+              key="settings"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              <AiPromptEditor
+              <SettingsPage
                 config={config}
                 onSave={handleUpdateConfig}
                 onOpenTester={() => {
                   setProjectToTest(null);
                   setIsTesterModalOpen(true);
                 }}
+                onClearHistory={handleClearHistory}
               />
             </motion.div>
           )}

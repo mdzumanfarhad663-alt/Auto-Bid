@@ -1,6 +1,7 @@
 /**
  * OpenAI Service for Freelancer Proposal Generation
- * Uses gpt-4o-mini to draft high-converting, concise (<150 words) proposals.
+ * Uses OpenAI models (gpt-4o-mini, gpt-4o, o3-mini, etc.) to draft high-converting,
+ * concise (<140 words) proposals following strict Markdown rules.
  */
 
 import { GoogleGenAI } from '@google/genai';
@@ -15,9 +16,10 @@ export interface GenerateProposalParams {
     currency: string;
   };
   clientCountry?: string;
+  clientName?: string;
   mySkills: string[];
   portfolioLinks: string[];
-  ctaQuestion: string;
+  ctaQuestion?: string;
   customSystemPrompt?: string;
   customApiKey?: string;
   model?: string;
@@ -26,62 +28,108 @@ export interface GenerateProposalParams {
 
 export interface ProposalGenerationResult {
   proposal: string;
+  proposalSource: 'openai' | 'gemini' | 'template';
   modelUsed: string;
   wordCount: number;
   tokensUsed?: number;
   recommendedBidAmount?: number;
   recommendedDeliveryDays?: number;
   pricingReasoning?: string;
+  ctaQuestion?: string;
+  errorMessage?: string;
 }
+
+export const DEFAULT_PROPOSAL_RULES = `OUTPUT FORMAT (follow exactly):
+
+Line 1: "Hi {client_name}," — if client name is empty, write only "Hi,"
+[blank line]
+Paragraph 1 (1–2 sentences): Restate the client's exact problem or goal using details from the job post, then say clearly that I can fix/build it. Do not start with "I".
+[blank line]
+Paragraph 2 (2–3 sentences): Proof. Mention a similar project I've done using {skills}, with one specific result or detail. Keep it believable and concrete.
+[blank line]
+Paragraph 3 (1–2 sentences): My quick plan — how I would approach this job in simple steps written as a sentence.
+[blank line]
+Last line: {cta_question}
+
+HARD RULES:
+- The first word of the proposal must always be "Hi". No exceptions.
+- Put exactly one blank line between every section.
+- Total length under 140 words.
+- Plain text only. No bullet points, no bold, no emojis, no headings, no signature, no name at the end.
+- Write like a real person typing a message: short sentences, simple English, confident tone.
+- Never use these phrases: "I came across your project", "I am excited", "I am the perfect fit", "Dear Sir", "I have read your job description", "look no further", "seamless", "leverage", "delve".
+- Do not repeat the job post back word for word.
+- Do not invent fake client names, fake links, or fake numbers.
+- Output only the proposal text, nothing before or after it.`;
 
 export async function generateProposal(params: GenerateProposalParams): Promise<ProposalGenerationResult> {
   const apiKey = params.customApiKey || process.env.OPENAI_API_KEY;
   const modelName = params.model || 'gpt-4o-mini';
   const useAiPricing = params.useAiPricingAndDays !== false;
 
-  const defaultSystemPrompt = `You are an elite top 1% full-stack freelancer submitting a winning bid proposal on Freelancer.com.
-Follow these non-negotiable rules:
-1. WORD COUNT: Under 140 words. Absolute maximum 150 words.
-2. NO CLICHÉ GREETINGS: Do NOT say "Dear Hiring Manager", "I hope this finds you well", or "I am thrilled to apply". Start immediately with a sharp, direct observation regarding their technical problem.
-3. CONCISE PROBLEM IDENTIFICATION: Show you read their exact specs in the first 2 sentences.
-4. RELEVANT TECH STACK: Mention only the exact tools matching their job: ${params.mySkills.join(', ')}.
-5. PORTFOLIO PROOF: Naturally include relevant portfolio proof: ${params.portfolioLinks.slice(0, 2).join(' | ')}.
-6. TECHNICAL CTA: Conclude with a single, sharp technical question to initiate conversation: "${params.ctaQuestion || 'When are you available for a brief 5-minute technical alignment chat?'}"
-7. TONE: Confident, crisp, authoritative, engineering-focused. No fluff.`;
+  // Clean client name if available (avoid usernames like user_128938)
+  let cleanClientName = '';
+  if (params.clientName && params.clientName.trim()) {
+    const raw = params.clientName.trim();
+    if (!/^\d+$/.test(raw) && !/^user[_\d]/i.test(raw)) {
+      cleanClientName = raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+  }
 
-  const baseInstruction = params.customSystemPrompt && params.customSystemPrompt.trim() !== ''
+  const promptTemplate = params.customSystemPrompt && params.customSystemPrompt.trim() !== ''
     ? params.customSystemPrompt
-        .replace('{skills}', params.mySkills.join(', '))
-        .replace('{portfolio_links}', params.portfolioLinks.join(', '))
-        .replace('{cta_question}', params.ctaQuestion)
-    : defaultSystemPrompt;
+    : DEFAULT_PROPOSAL_RULES;
 
-  const systemInstruction = useAiPricing
-    ? `${baseInstruction}
+  // Replace placeholders in the custom rules / system prompt
+  let baseInstruction = promptTemplate
+    .replace(/\{client_name\}/g, cleanClientName)
+    .replace(/\{skills\}/g, params.mySkills.slice(0, 4).join(', '))
+    .replace(/\{portfolio_links\}/g, params.portfolioLinks.slice(0, 2).join(' | '));
 
+  // If {cta_question} is in template, we instruct the model to generate a project-specific technical question
+  const ctaInstruction = params.ctaQuestion && params.ctaQuestion.trim()
+    ? `Use this closing question or a tailored variation: "${params.ctaQuestion}"`
+    : `Generate an intelligent, highly relevant technical question based specifically on this job post to start a conversation.`;
+
+  baseInstruction = baseInstruction.replace(
+    /\{cta_question\}/g,
+    params.ctaQuestion ? params.ctaQuestion : `[A single, smart technical question directly related to their project requirements]`
+  );
+
+  const systemInstruction = `${baseInstruction}
+
+INSTRUCTIONS FOR CLIENT NAME:
+- If client name is "${cleanClientName}" and not empty, the first line MUST be: "Hi ${cleanClientName},"
+- If client name is empty or unknown, the first line MUST be: "Hi,"
+
+INSTRUCTIONS FOR CTA QUESTION:
+- ${ctaInstruction}
+
+${useAiPricing ? `
 ADDITIONAL RULE FOR BID PRICING & TIMELINE:
-You must also analyze the project scope, technical complexity, and deliverables against the client's budget of ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}.
-Select the most competitive, optimal Bid Amount (STRICTLY between ${params.budget.minimum} and ${params.budget.maximum}) and realistic Delivery Days (e.g. 1-14 days).
+You must also evaluate the project scope, technical requirements, and deliverables against the client's budget of ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}.
+Select the most competitive, winning Bid Amount (STRICTLY between ${params.budget.minimum} and ${params.budget.maximum} ${params.budget.currency}) and realistic Delivery Days (e.g., 1-14 days).
 You MUST respond with valid JSON in this exact structure:
 {
-  "proposal": "<your winning proposal under 140 words>",
+  "proposal": "<your winning proposal under 140 words strictly following the 4 paragraphs and hard rules>",
   "recommendedBidAmount": <number between ${params.budget.minimum} and ${params.budget.maximum}>,
-  "recommendedDeliveryDays": <integer delivery days>,
-  "pricingReasoning": "<1 sentence explaining why this price & timeframe is optimal>"
-}`
-    : baseInstruction;
+  "recommendedDeliveryDays": <integer delivery days between 1 and 14>,
+  "pricingReasoning": "<1 concise sentence explaining the optimal bid amount and timeframe>",
+  "ctaQuestion": "<the project-specific question you generated for the last line>"
+}` : ''}`;
 
   const userPrompt = `Project Title: ${params.projectTitle}
 Budget: ${params.budget.minimum} - ${params.budget.maximum} ${params.budget.currency}
-Required Skills: ${params.skills.join(', ')}
+Skills: ${params.skills.join(', ')}
 ${params.clientCountry ? `Client Location: ${params.clientCountry}` : ''}
+${cleanClientName ? `Client Name: ${cleanClientName}` : ''}
 
-Project Details:
+Job Description:
 """
 ${params.projectDescription}
 """
 
-${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, recommendedDeliveryDays, and pricingReasoning now:' : 'Generate the winning proposal now (under 150 words, high impact):'}`;
+${useAiPricing ? 'Generate the JSON object now:' : 'Generate the winning proposal now (under 140 words, follow output format strictly):'}`;
 
   // Default fallback bid amount & days based on budget heuristics
   const defaultAmount = Math.max(
@@ -106,7 +154,7 @@ ${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, 
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.65,
-          max_tokens: 500,
+          max_tokens: 600,
           response_format: useAiPricing ? { type: 'json_object' } : undefined,
         }),
       });
@@ -134,22 +182,25 @@ ${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, 
           }
 
           return {
-            proposal,
+            proposal: proposal.trim(),
+            proposalSource: 'openai',
             modelUsed: modelName,
             wordCount: proposal.split(/\s+/).filter(Boolean).length,
             tokensUsed: data.usage?.total_tokens,
             recommendedBidAmount: Math.round(bidAmount),
             recommendedDeliveryDays: deliveryDays,
             pricingReasoning: parsed.pricingReasoning || `AI-selected optimal price within ${params.budget.currency} ${params.budget.minimum}-${params.budget.maximum}`,
+            ctaQuestion: parsed.ctaQuestion,
           };
         } catch (jsonErr) {
-          // If JSON parse failed, clean and use rawText
+          // If JSON parse failed, use text
         }
       }
 
       const words = rawText.split(/\s+/).filter(Boolean).length;
       return {
-        proposal: rawText,
+        proposal: rawText.trim(),
+        proposalSource: 'openai',
         modelUsed: modelName,
         wordCount: words,
         tokensUsed: data.usage?.total_tokens,
@@ -157,8 +208,8 @@ ${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, 
         recommendedDeliveryDays: defaultDays,
       };
     } catch (err: any) {
-      console.warn('OpenAI API call failed, falling back to backup generator if available:', err.message);
-      // Fall through to Gemini or template fallback
+      console.warn('OpenAI API call failed:', err.message);
+      // Fall through to Gemini or template fallback with error logged
     }
   }
 
@@ -188,19 +239,22 @@ ${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, 
           }
 
           return {
-            proposal,
-            modelUsed: 'gemini-2.5-flash (OpenAI fallback)',
+            proposal: proposal.trim(),
+            proposalSource: 'gemini',
+            modelUsed: 'gemini-2.5-flash (OpenAI Fallback)',
             wordCount: proposal.split(/\s+/).filter(Boolean).length,
             recommendedBidAmount: Math.round(bidAmount),
             recommendedDeliveryDays: deliveryDays,
             pricingReasoning: parsed.pricingReasoning || 'AI scope & budget optimization',
+            ctaQuestion: parsed.ctaQuestion,
           };
         } catch (e) {}
       }
 
       return {
-        proposal: rawText,
-        modelUsed: 'gemini-2.5-flash (OpenAI fallback)',
+        proposal: rawText.trim(),
+        proposalSource: 'gemini',
+        modelUsed: 'gemini-2.5-flash (OpenAI Fallback)',
         wordCount: rawText.split(/\s+/).filter(Boolean).length,
         recommendedBidAmount: defaultAmount,
         recommendedDeliveryDays: defaultDays,
@@ -210,21 +264,30 @@ ${useAiPricing ? 'Generate the JSON object with proposal, recommendedBidAmount, 
     }
   }
 
-  // 3. Robust template-based fallback
-  const techKeywords = params.skills.slice(0, 3).join(' and ');
-  const fallbackProposal = `Hi, I analyzed your project requirements for "${params.projectTitle}". 
+  // 3. Deterministic template fallback strictly following the 4 paragraphs & hard rules format
+  const greeting = cleanClientName ? `Hi ${cleanClientName},` : `Hi,`;
+  const primarySkill = params.skills[0] || params.mySkills[0] || 'web development';
+  const relatedSkills = params.mySkills.slice(0, 3).join(', ');
+  const cta = params.ctaQuestion || `Are you currently using any existing tools or plugins that we should integrate with?`;
 
-Having architected multiple production applications with ${techKeywords || params.mySkills.slice(0, 3).join(', ')}, I can deliver a clean, performant, and fully documented solution tailored to your timeline.
+  const fallbackProposal = `${greeting}
 
-I focus strictly on clean code architecture, rapid delivery, and transparent daily updates. Check out relevant project benchmarks here: ${params.portfolioLinks[0] || 'https://github.com/my-portfolio'}.
+Your project requires addressing ${params.projectTitle.toLowerCase()}, and that's something I can build and deliver cleanly.
 
-${params.ctaQuestion || 'Could you share the repository or wireframes so I can prepare an exact technical breakdown?'}`;
+Recently I completed a similar project utilizing ${relatedSkills} with high performance and zero regressions. I work daily with ${relatedSkills}.
+
+I would start by reviewing the exact technical specs, implement the core functionality first, and thoroughly test before handoff.
+
+${cta}`;
 
   return {
-    proposal: fallbackProposal,
-    modelUsed: 'deterministic-template-engine (Configure OPENAI_API_KEY in Settings)',
+    proposal: fallbackProposal.trim(),
+    proposalSource: 'template',
+    modelUsed: 'template-fallback (Add OpenAI API Key in Settings)',
     wordCount: fallbackProposal.split(/\s+/).filter(Boolean).length,
     recommendedBidAmount: defaultAmount,
     recommendedDeliveryDays: defaultDays,
+    ctaQuestion: cta,
+    pricingReasoning: `Default rule-based calculation (85% of client max budget: ${params.budget.currency} ${defaultAmount})`,
   };
 }

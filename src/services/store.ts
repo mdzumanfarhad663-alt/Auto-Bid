@@ -341,6 +341,7 @@ class ProjectStore {
           skills: project.jobs.map((j) => j.name),
           budget: project.budget,
           clientCountry: project.client.country,
+          clientName: project.client.username,
           mySkills: config.freelancerSkills,
           portfolioLinks: config.portfolioLinks,
           ctaQuestion: config.ctaQuestion,
@@ -351,6 +352,10 @@ class ProjectStore {
         });
 
         project.generatedProposal = aiResult.proposal;
+        project.proposalSource = aiResult.proposalSource;
+        project.modelUsed = aiResult.modelUsed;
+        project.pricingReasoning = aiResult.pricingReasoning;
+        project.generatedAt = Date.now();
         if (aiResult.recommendedBidAmount) {
           project.bidAmount = aiResult.recommendedBidAmount;
         }
@@ -424,6 +429,7 @@ class ProjectStore {
       skills: (project.jobs || []).map((j: any) => (typeof j === 'string' ? j : j.name)),
       budget: project.budget || { minimum: 20, maximum: 250, currency: 'USD' },
       clientCountry: project.client?.country,
+      clientName: project.client?.username,
       mySkills: config.freelancerSkills,
       portfolioLinks: config.portfolioLinks,
       ctaQuestion: config.ctaQuestion,
@@ -434,6 +440,10 @@ class ProjectStore {
     });
 
     project.generatedProposal = aiResult.proposal;
+    project.proposalSource = aiResult.proposalSource;
+    project.modelUsed = aiResult.modelUsed;
+    project.pricingReasoning = aiResult.pricingReasoning;
+    project.generatedAt = Date.now();
     project.status = 'BID_PLACED';
     project.bidPlacedAt = Date.now();
 
