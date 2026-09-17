@@ -30,7 +30,8 @@ import {
   HelpCircle,
   FileCode,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Globe
 } from 'lucide-react';
 
 interface SettingsPageProps {
@@ -62,7 +63,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   // Always initialize and sync with latest config
   const [formData, setFormData] = useState<FilterConfig>({ ...config });
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'ai' | 'rules' | 'budget' | 'autobid' | 'filters' | 'profile' | 'backup'>('all');
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'countries' | 'filters' | 'budget' | 'rules' | 'autobid' | 'ai' | 'profile' | 'backup'>('all');
   
   const [showApiKey, setShowApiKey] = useState(false);
   const [verifyingKey, setVerifyingKey] = useState(false);
@@ -70,6 +71,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   
   const [newSkill, setNewSkill] = useState('');
   const [newNegative, setNewNegative] = useState('');
+  const [newCountry, setNewCountry] = useState('');
+  const [newBlockedCategory, setNewBlockedCategory] = useState('');
+  const [newLanguage, setNewLanguage] = useState('');
   const [newFreelancerSkill, setNewFreelancerSkill] = useState('');
   const [newPortfolio, setNewPortfolio] = useState('');
   const [newCurrency, setNewCurrency] = useState('');
@@ -117,6 +121,83 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     } finally {
       setVerifyingKey(false);
     }
+  };
+
+  // Add / Remove Blocked Countries
+  const handleAddBlockedCountry = (countryName: string) => {
+    const trimmed = countryName.trim();
+    if (!trimmed) return;
+    const current = formData.blockedCountries || [];
+    if (!current.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      setFormData({
+        ...formData,
+        blockedCountries: [...current, trimmed],
+      });
+    }
+    setNewCountry('');
+  };
+
+  const handleRemoveBlockedCountry = (country: string) => {
+    setFormData({
+      ...formData,
+      blockedCountries: (formData.blockedCountries || []).filter(
+        (c) => c.toLowerCase() !== country.toLowerCase()
+      ),
+    });
+  };
+
+  const handleToggleCountry = (country: string) => {
+    const current = formData.blockedCountries || [];
+    const exists = current.some((c) => c.toLowerCase() === country.toLowerCase());
+    if (exists) {
+      handleRemoveBlockedCountry(country);
+    } else {
+      handleAddBlockedCountry(country);
+    }
+  };
+
+  // Add / Remove Blocked Categories
+  const handleAddBlockedCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newBlockedCategory.trim()) {
+      const current = formData.blockedCategories || [];
+      if (!current.includes(newBlockedCategory.trim())) {
+        setFormData({
+          ...formData,
+          blockedCategories: [...current, newBlockedCategory.trim()],
+        });
+      }
+      setNewBlockedCategory('');
+    }
+  };
+
+  const handleRemoveBlockedCategory = (category: string) => {
+    setFormData({
+      ...formData,
+      blockedCategories: (formData.blockedCategories || []).filter((c) => c !== category),
+    });
+  };
+
+  // Add / Remove Allowed Languages
+  const handleAddLanguage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newLanguage.trim()) {
+      const current = formData.allowedLanguages || ['English'];
+      if (!current.includes(newLanguage.trim())) {
+        setFormData({
+          ...formData,
+          allowedLanguages: [...current, newLanguage.trim()],
+        });
+      }
+      setNewLanguage('');
+    }
+  };
+
+  const handleRemoveLanguage = (lang: string) => {
+    setFormData({
+      ...formData,
+      allowedLanguages: (formData.allowedLanguages || ['English']).filter((l) => l !== lang),
+    });
   };
 
   // Add / Remove Mandatory Skills
@@ -323,24 +404,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           All Settings
         </button>
         <button
-          onClick={() => setActiveSubTab('ai')}
+          onClick={() => setActiveSubTab('countries')}
           className={`px-3 py-1.5 rounded-lg font-medium transition ${
-            activeSubTab === 'ai'
+            activeSubTab === 'countries'
               ? 'bg-slate-800 text-sky-400 border border-slate-700'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          🔑 OpenAI API Key &amp; Models
+          🌍 Blocked Countries ({(formData.blockedCountries || []).length})
         </button>
         <button
-          onClick={() => setActiveSubTab('rules')}
+          onClick={() => setActiveSubTab('filters')}
           className={`px-3 py-1.5 rounded-lg font-medium transition ${
-            activeSubTab === 'rules'
+            activeSubTab === 'filters'
               ? 'bg-slate-800 text-sky-400 border border-slate-700'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          📝 Markdown Proposal Rules
+          🎯 Skills &amp; Negative Keywords
         </button>
         <button
           onClick={() => setActiveSubTab('budget')}
@@ -353,6 +434,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           💰 AI Pricing &amp; Budget
         </button>
         <button
+          onClick={() => setActiveSubTab('rules')}
+          className={`px-3 py-1.5 rounded-lg font-medium transition ${
+            activeSubTab === 'rules'
+              ? 'bg-slate-800 text-sky-400 border border-slate-700'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          📝 Markdown Proposal Rules
+        </button>
+        <button
           onClick={() => setActiveSubTab('autobid')}
           className={`px-3 py-1.5 rounded-lg font-medium transition ${
             activeSubTab === 'autobid'
@@ -363,14 +454,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           🤖 Hands-Free Auto-Bid
         </button>
         <button
-          onClick={() => setActiveSubTab('filters')}
+          onClick={() => setActiveSubTab('ai')}
           className={`px-3 py-1.5 rounded-lg font-medium transition ${
-            activeSubTab === 'filters'
+            activeSubTab === 'ai'
               ? 'bg-slate-800 text-sky-400 border border-slate-700'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          🎯 Skills &amp; Blacklist
+          🔑 OpenAI API Key &amp; Models
         </button>
         <button
           onClick={() => setActiveSubTab('profile')}
@@ -856,7 +947,142 @@ Are you currently using any caching plugin or CDN on the site?`}
         </div>
       )}
 
-      {/* SECTION 5: Skills & Blacklist Qualification */}
+      {/* SECTION 5: Blocked Client Countries (Geo-Filtering) */}
+      {(activeSubTab === 'all' || activeSubTab === 'countries' || activeSubTab === 'filters') && (
+        <div id="section-country-blocking" className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Globe className="h-5 w-5 text-sky-400" />
+                Blocked Client Countries (Geo-Filter)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Automatically skip projects from clients located in specific countries. AutoBid and Live Scanner will immediately discard matches.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800 text-sky-400 border border-slate-700">
+                {(formData.blockedCountries || []).length} Countries Blocked
+              </span>
+            </div>
+          </div>
+
+          {/* Blocked Countries Tag Cloud */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-rose-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Ban className="h-3.5 w-3.5 text-rose-400" />
+                Active Blocklist
+              </span>
+              <span className="text-[11px] text-slate-500 font-normal">
+                Click any tag's 'x' to unblock, or click quick-add buttons below
+              </span>
+            </label>
+
+            <div className="flex flex-wrap gap-1.5 min-h-[46px] p-3 rounded-xl bg-slate-950 border border-slate-800 items-center">
+              {(formData.blockedCountries || []).length === 0 ? (
+                <span className="text-xs text-slate-500 italic">
+                  No countries blocked. Projects from all client countries are permitted.
+                </span>
+              ) : (
+                (formData.blockedCountries || []).map((country) => (
+                  <span
+                    key={country}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/30 text-xs font-medium shadow-xs"
+                  >
+                    <span>{country}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlockedCountry(country)}
+                      className="text-rose-400 hover:text-white transition"
+                      title={`Unblock ${country}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            {/* Custom Country Add Input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddBlockedCountry(newCountry);
+              }}
+              className="flex gap-2 max-w-md pt-1"
+            >
+              <input
+                type="text"
+                value={newCountry}
+                onChange={(e) => setNewCountry(e.target.value)}
+                placeholder="Type country name (e.g. India, Pakistan, Bangladesh, Nigeria)"
+                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+              <button
+                type="submit"
+                className="px-3.5 py-1.5 bg-rose-700 hover:bg-rose-600 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Block Country</span>
+              </button>
+            </form>
+
+            {/* Quick-Add Country Presets */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                Quick Toggle Frequent Countries:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'India',
+                  'Pakistan',
+                  'Bangladesh',
+                  'Nigeria',
+                  'Kenya',
+                  'Egypt',
+                  'Philippines',
+                  'Russia',
+                  'China',
+                  'Vietnam',
+                  'Indonesia',
+                  'Ukraine'
+                ].map((country) => {
+                  const isBlocked = (formData.blockedCountries || []).some(
+                    (c) => c.toLowerCase() === country.toLowerCase()
+                  );
+                  return (
+                    <button
+                      key={country}
+                      type="button"
+                      onClick={() => handleToggleCountry(country)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition border flex items-center gap-1 ${
+                        isBlocked
+                          ? 'bg-rose-950/70 text-rose-300 border-rose-700/60 hover:bg-rose-900/80'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                      }`}
+                    >
+                      {isBlocked ? (
+                        <>
+                          <Check className="h-3 w-3 text-rose-400" />
+                          <span>{country} (Blocked)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-3 w-3 text-slate-500" />
+                          <span>{country}</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 6: Skills & Blacklist Qualification */}
       {(activeSubTab === 'all' || activeSubTab === 'filters') && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
           <div>

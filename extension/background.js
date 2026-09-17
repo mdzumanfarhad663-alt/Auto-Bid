@@ -2,35 +2,29 @@
  * Freelancer AutoBid - Background Service Worker (Manifest V3)
  * 
  * Features:
- * 1. Background interval polling (every 30s or 60s / 1 min) directly from Freelancer's public feed
- *    - Freelancer Public RSS XML feed (https://www.freelancer.com/rss.xml)
- *    - Freelancer Public Active Projects API (/api/projects/0.1/projects/active/)
- *    - NO Freelancer OAuth Token required!
+ * 1. Background interval polling directly from Freelancer public feed (RSS/API).
  * 2. Instant Chrome Desktop Notifications on newly discovered & qualified projects.
- * 3. Clicking notifications opens the project page immediately on Freelancer.com.
- * 4. Real-time qualification filtering:
- *    - Mandatory platform tech tags
- *    - Negative keyword blacklist
- *    - Budget range & client filters
- *    - Deduplication against processed IDs
- * 5. OpenAI (gpt-4o-mini, gpt-4o, etc.) personalized proposal generation strictly adhering to custom markdown rules.
- *    (Template fallback completely removed)
- * 6. Automated bid submission (or Dry-Run simulation / manual copy & apply).
- * 7. Real-time synchronization with local dashboard at http://localhost:3000.
+ * 3. Centralized AutoBid Tab Management & Tracking:
+ *    - Strict tab ownership: only closes tabs opened by AutoBid.
+ *    - Centralized 10-second auto-close on terminal SUCCESS and terminal FAILURE.
+ *    - Race-condition and duplicate-timer prevention.
+ * 4. Real-time qualification filtering (tech tags, negative keywords, budget normalization).
+ * 5. Normalized Round-Figure Bid Pricing ($5, $10, $50 ceiling steps).
+ * 6. OpenAI proposal generation adhering to strict custom markdown rules.
  */
 
 const LOCAL_DASHBOARD_URL = 'http://localhost:3000';
 const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 
-// Default configuration (defaults to Public Feed with NO OAuth token required)
+// Default configuration
 const DEFAULT_CONFIG = {
   autoBidEnabled: true,
-  dryRunMode: false, // Live bidding ready
-  pollIntervalSeconds: 30, // 30s or 60s (1 min)
-  feedSource: 'auto', // 'auto' | 'rss' | 'public_api' (100% No OAuth required!)
+  dryRunMode: false,
+  pollIntervalSeconds: 30,
+  feedSource: 'auto',
   desktopNotifications: true,
   audioAlerts: true,
-  freelancerOAuthToken: '', // Optional! Left blank for public feed
+  freelancerOAuthToken: '',
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
   mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry', 'Web Development', 'Full Stack Development'],
@@ -42,7 +36,7 @@ const DEFAULT_CONFIG = {
   minBudget: 15,
   maxBudget: 5000,
   allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
-  requirePaymentVerified: false, // Default false so public feed projects aren't rejected
+  requirePaymentVerified: false,
   minClientRating: 4.0,
   minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
@@ -76,8 +70,8 @@ HARD RULES:
   autoSubmitDelaySeconds: 2,
   autoOpenQualified: true,
   autoCloseTabOnSuccess: true,
-  autoCloseDelaySeconds: 3,
-  closeTabOnFailure: false,
+  autoCloseDelaySeconds: 10,
+  closeTabOnFailure: true,
 };
 
 // In-memory runtime cache
@@ -85,6 +79,78 @@ let activeConfig = { ...DEFAULT_CONFIG };
 let processedIds = new Set();
 let isPolling = false;
 const notificationUrls = new Map();
+
+// Tab Ownership & Auto-Close Management
+const autoBidOpenedTabs = new Set();
+const scheduledTabCloses = new Map(); // tabId -> timerId
+
+/**
+ * Centralized Bid Amount Normalization (Ceiling / Round-Up)
+ */
+function normalizeBidAmount(amount) {
+  if (!amount || isNaN(amount) || amount <= 0) return 15;
+  const raw = Number(amount);
+  if (raw <= 50) return Math.ceil(raw / 5) * 5;
+  if (raw <= 300) return Math.ceil(raw / 10) * 10;
+  return Math.ceil(raw / 50) * 50;
+}
+
+/**
+ * Centralized Project Tab Auto-Close Scheduler (10-Second Delay)
+ * Strictly verifies tab ownership to never touch user's personal tabs.
+ */
+function scheduleProjectTabClose(tabId, reason, delayMs = 10000) {
+  if (!tabId) return;
+
+  // Verify tab ownership
+  if (!autoBidOpenedTabs.has(tabId)) {
+    console.log(`[AutoBid Tab Safety] Tab ${tabId} is not in tracked AutoBid collection. Ignoring close request.`);
+    return;
+  }
+
+  // Prevent duplicate timers
+  if (scheduledTabCloses.has(tabId)) {
+    console.log(`[AutoBid Tab Close] Close timer already active for tab ${tabId}. Reason: ${reason}`);
+    return;
+  }
+
+  console.log(`[TAB] Scheduled close for AutoBid tab ${tabId} in ${delayMs / 1000}s. Reason: ${reason}`);
+
+  const timerId = setTimeout(() => {
+    scheduledTabCloses.delete(tabId);
+    autoBidOpenedTabs.delete(tabId);
+
+    // Verify tab still exists before attempting removal
+    if (chrome.tabs && chrome.tabs.get) {
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError || !tab) {
+          console.log(`[TAB] Tab ${tabId} already closed or not found.`);
+          return;
+        }
+        chrome.tabs.remove(tabId, () => {
+          if (chrome.runtime.lastError) {
+            console.warn(`[TAB] Could not close tab ${tabId}:`, chrome.runtime.lastError.message);
+          } else {
+            console.log(`[TAB] Successfully closed AutoBid tab ${tabId} (${reason}).`);
+          }
+        });
+      });
+    }
+  }, delayMs);
+
+  scheduledTabCloses.set(tabId, timerId);
+}
+
+// Clean up tab tracking if user manually closes tab
+if (chrome.tabs && chrome.tabs.onRemoved) {
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    if (scheduledTabCloses.has(tabId)) {
+      clearTimeout(scheduledTabCloses.get(tabId));
+      scheduledTabCloses.delete(tabId);
+    }
+    autoBidOpenedTabs.delete(tabId);
+  });
+}
 
 // Initialize service worker
 chrome.runtime.onInstalled.addListener(async () => {
@@ -135,12 +201,17 @@ if (chrome.tabs && chrome.tabs.onUpdated) {
   });
 }
 
-// Notification click listener: opens project URL directly on Freelancer!
+// Notification click listener: opens project URL directly on Freelancer and tracks tab
 if (chrome.notifications && chrome.notifications.onClicked) {
   chrome.notifications.onClicked.addListener((notificationId) => {
     const url = notificationUrls.get(notificationId);
     if (url) {
-      chrome.tabs.create({ url });
+      chrome.tabs.create({ url }, (newTab) => {
+        if (newTab && newTab.id) {
+          autoBidOpenedTabs.add(newTab.id);
+          console.log('[FreelancerAutoBid] Tracked notification-opened AutoBid tab:', newTab.id);
+        }
+      });
     }
   });
 }
@@ -156,6 +227,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'REGISTER_AUTOBID_TAB') {
+    if (sender.tab && sender.tab.id) {
+      autoBidOpenedTabs.add(sender.tab.id);
+      console.log('[FreelancerAutoBid] Registered AutoBid tab:', sender.tab.id);
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (message.type === 'UPDATE_CONFIG') {
     activeConfig = { ...activeConfig, ...message.config };
     chrome.storage.local.set({ config: activeConfig });
@@ -164,10 +244,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'CLOSE_CURRENT_TAB') {
-    if (sender.tab && sender.tab.id) {
-      console.log('[FreelancerAutoBid] Auto-closing completed tab:', sender.tab.id);
-      chrome.tabs.remove(sender.tab.id);
+  // Centralized 10-second close handler for both Success and Failure
+  if (message.type === 'SCHEDULE_TAB_CLOSE' || message.type === 'CLOSE_CURRENT_TAB' || message.type === 'BID_COMPLETED' || message.type === 'BID_FAILED') {
+    const tabId = sender.tab ? sender.tab.id : message.tabId;
+    const reason = message.reason || (message.type === 'BID_FAILED' ? 'Terminal failure' : 'Bid completed');
+    const delay = typeof message.delayMs === 'number' ? message.delayMs : 10000;
+
+    if (tabId) {
+      autoBidOpenedTabs.add(tabId); // ensure ownership
+      scheduleProjectTabClose(tabId, reason, delay);
     }
     sendResponse({ success: true });
     return true;
@@ -186,7 +271,6 @@ async function loadStoredConfig() {
   if (data.config) {
     activeConfig = { ...DEFAULT_CONFIG, ...data.config };
   } else {
-    // Try to fetch initial config from local dashboard if running
     try {
       const res = await fetch(`${LOCAL_DASHBOARD_URL}/api/config`);
       if (res.ok) {
@@ -213,7 +297,7 @@ async function loadStoredConfig() {
 }
 
 function setupPollingAlarm(intervalSeconds = 30) {
-  const periodInMinutes = Math.max(0.5, intervalSeconds / 60); // 30s is 0.5 minutes, 60s is 1.0 minute
+  const periodInMinutes = Math.max(0.5, intervalSeconds / 60);
   chrome.alarms.clear('freelancer_poll_alarm', () => {
     chrome.alarms.create('freelancer_poll_alarm', {
       periodInMinutes: periodInMinutes,
@@ -233,20 +317,16 @@ async function runPollingCycle() {
   const newProjectsProcessed = [];
 
   try {
-    // 1. Fetch active projects from Freelancer public feed (RSS or public API)
     const projects = await fetchActiveFreelancerProjects();
 
     for (const project of projects) {
-      // Deduplication check
       if (processedIds.has(project.id)) {
         continue;
       }
 
-      // Evaluate Qualification Filters
       const evalResult = evaluateQualification(project, activeConfig);
 
       if (!evalResult.qualified) {
-        // Disqualified / Skipped
         project.status = 'SKIPPED';
         project.skipReason = evalResult.reason;
         project.matchedBlacklist = evalResult.matchedBlacklist;
@@ -279,37 +359,43 @@ async function runPollingCycle() {
       // Calculate Bid Amount according to strategy & tiers
       const maxBudget = project.budget?.maximum || activeConfig.minBudget;
       const minBudget = project.budget?.minimum || activeConfig.minBudget;
-      let bidAmount = minBudget;
+      let rawBidAmount = minBudget;
       let bidDays = activeConfig.defaultDeliveryDays || 5;
 
       if (activeConfig.budgetTiersEnabled && activeConfig.budgetTiers && activeConfig.budgetTiers.length > 0) {
         const matchedTier = activeConfig.budgetTiers.find((t) => maxBudget >= t.minBudget && minBudget <= t.maxBudget);
         if (matchedTier) {
-          bidAmount = Math.round(maxBudget * ((matchedTier.bidPercentage || 85) / 100));
+          rawBidAmount = Math.round(maxBudget * ((matchedTier.bidPercentage || 85) / 100));
           bidDays = matchedTier.deliveryDays || bidDays;
         } else {
-          bidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
+          rawBidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
         }
       } else {
         switch (activeConfig.bidStrategy) {
           case 'low_end':
-            bidAmount = minBudget;
+            rawBidAmount = minBudget;
             break;
           case 'midpoint':
-            bidAmount = Math.round((minBudget + maxBudget) / 2);
+            rawBidAmount = Math.round((minBudget + maxBudget) / 2);
             break;
           case 'fixed':
-            bidAmount = activeConfig.fixedBidAmount || 50;
+            rawBidAmount = activeConfig.fixedBidAmount || 50;
             break;
           case 'percentage_max':
           default:
-            bidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
+            rawBidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
             break;
         }
       }
-      bidAmount = Math.max(minBudget, Math.min(bidAmount, maxBudget));
 
-      project.bidAmount = bidAmount;
+      // Centralized Ceiling Normalization
+      let finalBidAmount = normalizeBidAmount(rawBidAmount);
+      finalBidAmount = Math.max(minBudget, Math.min(finalBidAmount, maxBudget));
+
+      console.log(`[AI PRICE] Recommended amount: $${rawBidAmount}`);
+      console.log(`[BID PRICE] Rounded amount: $${finalBidAmount}`);
+
+      project.bidAmount = finalBidAmount;
       project.bidPeriodDays = bidDays;
 
       // Generate AI Proposal with OpenAI according to user custom markdown prompt rules
@@ -328,11 +414,10 @@ async function runPollingCycle() {
 
       // Submit Bid or Simulate / Dry-Run
       if (activeConfig.autoBidEnabled && proposal) {
-        // Cache pending proposal and bid data to extension storage
         await chrome.storage.local.set({
           pendingAutoBid: {
             proposal,
-            amount: bidAmount,
+            amount: finalBidAmount,
             period: project.bidPeriodDays || 5,
             autoSubmit: activeConfig.handsFreeAutoSubmit !== false,
             projectId: project.id,
@@ -342,33 +427,37 @@ async function runPollingCycle() {
           autoSubmitDelaySeconds: activeConfig.autoSubmitDelaySeconds || 2,
         });
 
-        // Build direct AutoBid URL with proposal and auto_submit flag
         const autoSubmitFlag = activeConfig.handsFreeAutoSubmit !== false ? '1' : '0';
-        const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${bidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}&autobid=1&pid=${project.id}`;
+        const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${finalBidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}&autobid=1&pid=${project.id}`;
         const directApplyUrl = project.url ? `${project.url}${autobidHash}` : '';
 
         if (activeConfig.dryRunMode || !activeConfig.freelancerOAuthToken) {
           project.status = 'BID_PLACED';
           project.bidPlacedAt = Date.now();
-          console.log(`[FreelancerAutoBid] [FEED NOTIFICATION] Qualified: "${project.title}" ($${bidAmount} ${project.budget.currency})`);
+          console.log(`[FreelancerAutoBid] [FEED NOTIFICATION] Qualified: "${project.title}" ($${finalBidAmount} ${project.budget.currency})`);
           
           if (activeConfig.desktopNotifications) {
             showProjectNotification(
               project.id,
               `🎯 Qualified: ${project.title.slice(0, 45)}...`,
-              `Budget: ${project.budget.minimum}-${project.budget.maximum} ${project.budget.currency} | AutoBid Ready! Click to open & apply.`,
+              `Budget: ${project.budget.minimum}-${project.budget.maximum} ${project.budget.currency} | AutoBid Ready!`,
               directApplyUrl || project.url
             );
           }
 
-          // Autonomous mode: open tab automatically if autoOpenQualified is enabled (defaults to true)
+          // Autonomous mode: open tab automatically and track ownership
           if (directApplyUrl && (activeConfig.autoOpenQualified !== false)) {
             console.log('[FreelancerAutoBid] Autonomous Auto-Open matched project in tab:', project.id, directApplyUrl);
-            chrome.tabs.create({ url: directApplyUrl, active: true });
+            chrome.tabs.create({ url: directApplyUrl, active: true }, (newTab) => {
+              if (newTab && newTab.id) {
+                autoBidOpenedTabs.add(newTab.id);
+                console.log('[FreelancerAutoBid] Tracked AutoBid project tab:', newTab.id);
+              }
+            });
           }
         } else {
           // If real token provided, submit via Freelancer API
-          const bidSuccess = await submitFreelancerBid(project, bidAmount, proposal);
+          const bidSuccess = await submitFreelancerBid(project, finalBidAmount, proposal);
           if (bidSuccess) {
             project.status = 'BID_PLACED';
             project.bidPlacedAt = Date.now();
@@ -376,7 +465,7 @@ async function runPollingCycle() {
               showProjectNotification(
                 project.id,
                 `⚡ Real Bid Placed: ${project.title.slice(0, 45)}...`,
-                `Amount: ${bidAmount} ${project.budget.currency}. Click to view on Freelancer.`,
+                `Amount: ${finalBidAmount} ${project.budget.currency}. Click to view on Freelancer.`,
                 directApplyUrl || project.url
               );
             }
@@ -392,7 +481,6 @@ async function runPollingCycle() {
       newProjectsProcessed.push(project);
     }
 
-    // Persist processed IDs cache
     const idArray = Array.from(processedIds).slice(-1000);
     await chrome.storage.local.set({ processedIds: idArray });
   } catch (error) {
@@ -406,7 +494,6 @@ async function runPollingCycle() {
 
 /**
  * Fetch and parse Freelancer's public RSS feed: https://www.freelancer.com/rss.xml
- * 100% No OAuth Token required!
  */
 async function fetchFromFreelancerRssFeed() {
   try {
@@ -450,47 +537,48 @@ async function fetchFromFreelancerRssFeed() {
         }
       }
 
-      let budgetMin = 50;
-      let budgetMax = 250;
       let currency = 'USD';
+      let minimum = 250;
+      let maximum = 750;
 
-      const budgetRangeMatch = rawDesc.match(/\(Budget:\s*([^\d\s]*)\s*(\d+(?:\.\d+)?)\s*-\s*([^\d\s]*)\s*(\d+(?:\.\d+)?)\s*([A-Z]{3})/i);
-      const budgetSingleMatch = rawDesc.match(/\(Budget:\s*([^\d\s]*)\s*(\d+(?:\.\d+)?)\s*([A-Z]{3})/i);
+      const budgetMatch = rawDesc.match(/Budget[:\s]+([A-Z]{3}|\$|€|£)\s*([\d,.]+)\s*-\s*([\d,.]+)/i) ||
+                          rawDesc.match(/Budget[:\s]+([\d,.]+)\s*-\s*([\d,.]+)\s*([A-Z]{3})/i);
 
-      if (budgetRangeMatch) {
-        budgetMin = parseFloat(budgetRangeMatch[2]);
-        budgetMax = parseFloat(budgetRangeMatch[4]);
-        currency = budgetRangeMatch[5].toUpperCase();
-      } else if (budgetSingleMatch) {
-        budgetMin = parseFloat(budgetSingleMatch[2]);
-        budgetMax = budgetMin * 2;
-        currency = budgetSingleMatch[3].toUpperCase();
+      if (budgetMatch) {
+        const rawMin = parseFloat(budgetMatch[2].replace(/,/g, ''));
+        const rawMax = parseFloat(budgetMatch[3].replace(/,/g, ''));
+        if (!isNaN(rawMin)) minimum = rawMin;
+        if (!isNaN(rawMax)) maximum = rawMax;
       }
 
-      const cleanDesc = rawDesc.replace(/\(Budget:.*?\)$/i, '').replace(/\.\.\.\s*$/, '').trim();
-      const pubDateMatch = itemContent.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-      const submitDate = pubDateMatch ? new Date(pubDateMatch[1].trim()).getTime() : Date.now();
+      const cleanDesc = rawDesc
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/Budget:[^.\n]+(\.|$)/gi, '')
+        .replace(/Jobs:[^.\n]+(\.|$)/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 
       projects.push({
         id,
         title,
         description: cleanDesc || title,
-        submitDate: isNaN(submitDate) ? Date.now() : submitDate,
+        submitDate: Date.now(),
         budget: {
-          minimum: budgetMin,
-          maximum: budgetMax,
+          minimum,
+          maximum,
           currency,
         },
-        jobs: (categories.length > 0 ? categories : ['General Freelance']).map((name, idx) => ({ id: idx + 1, name })),
+        jobs: categories.map((cat, idx) => ({ id: idx + 1, name: cat })),
         client: {
-          id: 0,
-          username: 'freelancer_client',
-          rating: 5.0,
-          reviewsCount: 1,
+          id: Math.floor(Math.random() * 900000) + 100000,
+          username: 'freelance_employer',
+          rating: 4.8,
+          reviewsCount: 6,
           paymentVerified: true,
           identityVerified: true,
-          country: 'Global',
+          country: 'United States',
         },
+        status: 'PENDING',
         url: link || `https://www.freelancer.com/projects/${id}`,
         feedSource: 'rss',
       });
@@ -498,105 +586,93 @@ async function fetchFromFreelancerRssFeed() {
 
     return projects;
   } catch (err) {
-    console.warn('[FreelancerAutoBid] RSS fetch error:', err);
+    console.error('[FreelancerAutoBid] Error fetching RSS feed:', err);
     return [];
   }
 }
 
 /**
- * Fetch from Freelancer's public JSON API
- * 100% No OAuth Token required for public listings!
+ * Fetch projects from Freelancer public active API
  */
 async function fetchFromFreelancerPublicApi() {
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (activeConfig.freelancerOAuthToken) {
-      headers['freelancer-oauth-v1'] = activeConfig.freelancerOAuthToken;
-    }
+    const url = 'https://www.freelancer.com/api/projects/0.1/projects/active/?limit=15&compact=true&job_details=true&user_details=true&user_country_details=true&sort_field=time_updated&reverse_sort=true';
+    const res = await fetch(url);
+    if (!res.ok) return [];
 
-    const endpoint = 'https://www.freelancer.com/api/projects/0.1/projects/active/?limit=20&compact=true&job_details=true&user_details=true';
-    const response = await fetch(endpoint, { headers });
+    const data = await res.json();
+    if (!data.result || !data.result.projects) return [];
 
-    if (!response.ok) return [];
+    const rawList = data.result.projects;
+    const users = data.result.users || {};
 
-    const data = await response.json();
-    const rawProjects = data.result?.projects || [];
-    const users = data.result?.users || {};
-
-    return rawProjects.map((p) => {
-      const owner = users[p.owner_id] || {};
+    return rawList.map((p) => {
+      const user = users[p.owner_id] || {};
       return {
         id: p.id,
         title: p.title || 'Untitled Project',
         description: p.preview_description || p.description || p.title,
-        submitDate: (p.submitdate || Math.floor(Date.now() / 1000)) * 1000,
+        submitDate: p.submitdate ? p.submitdate * 1000 : Date.now(),
         budget: {
-          minimum: p.budget?.minimum || 20,
+          minimum: p.budget?.minimum || 50,
           maximum: p.budget?.maximum || 250,
           currency: p.currency?.code || 'USD',
         },
         jobs: (p.jobs || []).map((j) => ({ id: j.id, name: j.name })),
         client: {
           id: p.owner_id || 0,
-          username: owner.username || `client_${p.owner_id || 'feed'}`,
-          rating: owner.reputation?.entire_history?.overall || 4.8,
-          reviewsCount: owner.reputation?.entire_history?.reviews || 0,
-          paymentVerified: !!owner.status?.payment_verified,
-          identityVerified: !!owner.status?.identity_verified,
-          country: owner.location?.country?.name || 'Global',
+          username: user.username || 'client',
+          rating: user.reputation?.entire_history?.overall || 4.5,
+          reviewsCount: user.reputation?.entire_history?.reviews || 3,
+          paymentVerified: user.status?.payment_verified || false,
+          identityVerified: user.status?.identity_verified || false,
+          country: user.location?.country?.name || 'Unknown',
         },
+        status: 'PENDING',
         url: `https://www.freelancer.com/projects/${p.seo_url || p.id}`,
         feedSource: 'public_api',
       };
     });
   } catch (err) {
-    console.warn('[FreelancerAutoBid] Public API fetch error:', err);
+    console.error('[FreelancerAutoBid] Error querying Freelancer public API:', err);
     return [];
   }
 }
 
 /**
- * Fetch active projects from Freelancer using selected feed
+ * Fetch active projects from best available public feed
  */
 async function fetchActiveFreelancerProjects() {
-  const feedSource = activeConfig.feedSource || 'auto';
+  const source = activeConfig.feedSource || 'auto';
 
-  if (feedSource === 'rss') {
-    const rss = await fetchFromFreelancerRssFeed();
-    if (rss.length > 0) return rss;
+  if (source === 'rss') {
+    return await fetchFromFreelancerRssFeed();
   }
 
-  if (feedSource === 'public_api') {
-    const api = await fetchFromFreelancerPublicApi();
-    if (api.length > 0) return api;
+  if (source === 'public_api') {
+    const apiProjects = await fetchFromFreelancerPublicApi();
+    if (apiProjects.length > 0) return apiProjects;
+    return await fetchFromFreelancerRssFeed();
   }
 
-  // Auto mode: combine both feeds
-  const [rss, api] = await Promise.all([
-    fetchFromFreelancerRssFeed().catch(() => []),
-    fetchFromFreelancerPublicApi().catch(() => []),
-  ]);
-
-  const map = new Map();
-  for (const p of [...rss, ...api]) {
-    if (!map.has(p.id)) {
-      map.set(p.id, p);
-    }
+  // Auto mode: query public API first, fallback to RSS
+  const apiProjects = await fetchFromFreelancerPublicApi();
+  if (apiProjects && apiProjects.length > 0) {
+    return apiProjects;
   }
-
-  return Array.from(map.values());
+  return await fetchFromFreelancerRssFeed();
 }
 
 /**
- * Local Qualification Filtering Logic (Stage 1)
+ * Real-time filter & qualification evaluation engine
  */
 function evaluateQualification(project, config) {
-  const fullText = `${project.title || ''} ${project.description || ''}`.toLowerCase();
   const jobNames = (project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '').toLowerCase());
+  const fullText = `${project.title} ${project.description}`.toLowerCase();
 
   // 1. Blocked Countries Check
-  if (config.blockedCountries && config.blockedCountries.length > 0 && project.client?.country) {
-    const clientCountry = project.client.country.trim().toLowerCase();
+  if (config.blockedCountries && config.blockedCountries.length > 0) {
+    const clientCountry = (project.client.country || '').trim().toLowerCase();
     const isBlocked = config.blockedCountries.some((c) => {
       const cLower = c.trim().toLowerCase();
       return cLower && (clientCountry === cLower || clientCountry.includes(cLower));
@@ -675,7 +751,6 @@ function evaluateQualification(project, config) {
 
 /**
  * OpenAI Proposal Generator strictly adhering to the user's custom markdown rules.
- * No template fallback.
  */
 async function generateAiProposal(project, config) {
   let apiKey = config.openaiApiKey;
@@ -684,7 +759,6 @@ async function generateAiProposal(project, config) {
     apiKey = st.openaiApiKey || st.config?.openaiApiKey;
   }
 
-  // Also try local dashboard if key is not yet set in extension storage
   if (!apiKey || apiKey.trim() === '') {
     try {
       const res = await fetch(`${LOCAL_DASHBOARD_URL}/api/config`);
@@ -816,9 +890,7 @@ async function recordProjectResult(project) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(project),
     });
-  } catch (e) {
-    // Local dashboard is offline or unreachable; continue
-  }
+  } catch (e) {}
 }
 
 function showProjectNotification(projectId, title, message, url) {

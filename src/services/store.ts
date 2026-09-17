@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { FreelancerProject, FilterConfig, BidLog, SystemStats, DashboardData, DEFAULT_CONFIG } from '../types.ts';
 import { generateProposal } from './openai.ts';
+import { normalizeBidAmount } from './pricing.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
@@ -439,6 +440,9 @@ class ProjectStore {
           break;
       }
     }
+
+    // Normalize to clean round figure
+    amount = normalizeBidAmount(amount);
 
     // Bound within project minimum and maximum
     amount = Math.max(min, Math.min(amount, max));

@@ -21,7 +21,9 @@ import {
   Upload,
   Cpu,
   MousePointerClick,
-  Clock
+  Clock,
+  Globe,
+  Check
 } from 'lucide-react';
 
 interface FilterSettingsModalProps {
@@ -40,6 +42,7 @@ export const FilterSettingsModal: React.FC<FilterSettingsModalProps> = ({
   const [formData, setFormData] = useState<FilterConfig>({ ...config });
   const [newMandatoryTag, setNewMandatoryTag] = useState('');
   const [newNegativeWord, setNewNegativeWord] = useState('');
+  const [newCountryTag, setNewCountryTag] = useState('');
   const [newPortfolioLink, setNewPortfolioLink] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [verifyingKey, setVerifyingKey] = useState(false);
@@ -47,6 +50,38 @@ export const FilterSettingsModal: React.FC<FilterSettingsModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const handleAddCountry = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const current = formData.blockedCountries || [];
+    if (!current.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      setFormData({
+        ...formData,
+        blockedCountries: [...current, trimmed],
+      });
+    }
+    setNewCountryTag('');
+  };
+
+  const handleRemoveCountry = (country: string) => {
+    setFormData({
+      ...formData,
+      blockedCountries: (formData.blockedCountries || []).filter(
+        (c) => c.toLowerCase() !== country.toLowerCase()
+      ),
+    });
+  };
+
+  const handleToggleCountry = (country: string) => {
+    const current = formData.blockedCountries || [];
+    const exists = current.some((c) => c.toLowerCase() === country.toLowerCase());
+    if (exists) {
+      handleRemoveCountry(country);
+    } else {
+      handleAddCountry(country);
+    }
+  };
 
   const handleVerifyApiKey = async () => {
     if (!formData.openaiApiKey || formData.openaiApiKey.trim() === '') {
@@ -352,6 +387,84 @@ export const FilterSettingsModal: React.FC<FilterSettingsModalProps> = ({
               >
                 <Plus className="h-3.5 w-3.5" /> Add
               </button>
+            </div>
+          </div>
+
+          {/* Section 2.5: Blocked Client Countries (Geo-Filter) */}
+          <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <label className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <Globe className="h-4 w-4 text-sky-400" />
+                Blocked Client Countries (Geo-Filter)
+              </label>
+              <span className="text-[11px] text-slate-400">
+                {(formData.blockedCountries || []).length} blocked
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">
+              Projects from clients located in these countries are automatically skipped and disqualified.
+            </p>
+
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {(formData.blockedCountries || []).length === 0 ? (
+                <span className="text-xs text-slate-500 italic">
+                  No countries blocked (All countries permitted)
+                </span>
+              ) : (
+                (formData.blockedCountries || []).map((c) => (
+                  <span
+                    key={c}
+                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-rose-950/80 text-rose-300 border border-rose-800/60 font-medium"
+                  >
+                    {c}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCountry(c)}
+                      className="hover:text-white ml-1"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                placeholder="Add country to block (e.g. India, Pakistan, Bangladesh)..."
+                value={newCountryTag}
+                onChange={(e) => setNewCountryTag(e.target.value)}
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddCountry(newCountryTag)}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" /> Block
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1">
+              <span className="text-[10px] text-slate-400 mr-1">Quick:</span>
+              {['India', 'Pakistan', 'Bangladesh', 'Nigeria', 'Kenya', 'Egypt', 'Philippines', 'Russia'].map((c) => {
+                const isBlocked = (formData.blockedCountries || []).some((item) => item.toLowerCase() === c.toLowerCase());
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleToggleCountry(c)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition ${
+                      isBlocked
+                        ? 'bg-rose-900/60 text-rose-200 border-rose-600'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {isBlocked ? `✓ ${c}` : `+ ${c}`}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

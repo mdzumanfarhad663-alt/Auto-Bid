@@ -19,7 +19,7 @@ export const ProjectFiltersPage: React.FC = () => {
           Project Filters &amp; Criteria
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Configure mandatory platform skills, negative keyword blacklists, client ratings, and budget boundaries
+          Configure client country blocks, mandatory platform skills, negative keyword blacklists, client ratings, and budget boundaries
         </p>
       </div>
 

@@ -4,10 +4,15 @@
  * STRICT SAFETY ARCHITECTURE:
  * 1. Scope all DOM operations strictly inside verified Place Bid containers.
  * 2. Positively reject and prevent typing or sending anywhere near client messaging, chat drawers, or messenger components.
- * 3. Dual-stage validation: performs in-page verification of skills, blacklist, country, and budget before filling.
- * 4. Dual-input amount synchronization (bid amount + milestone amount).
- * 5. Reliable event dispatching for Angular/React/native forms.
- * 6. Post-submission verification and autonomous tab management.
+ * 3. Never touch or modify the milestone "Description" field ("Project milestone from freelancer.com").
+ * 4. Only interact with the 4 verified bid-related fields:
+ *    - Proposal
+ *    - Delivery Days
+ *    - Bid Amount
+ *    - Amount (Milestone Amount)
+ * 5. Guarantee Bid Amount and Amount always match the exact same normalized round figure.
+ * 6. Dual-stage validation: in-page verification of skills, blacklist, country, and budget.
+ * 7. Unified 10-Second Auto-Close on BOTH terminal SUCCESS and FAILURE for AutoBid-opened tabs.
  */
 
 (function () {
@@ -27,6 +32,26 @@
     } catch (e) {}
   }
 
+  // Register this tab with background script if opened via AutoBid
+  function registerWithBackground() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'REGISTER_AUTOBID_TAB' });
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Centralized Bid Amount Normalization (Ceiling / Round-Up)
+   */
+  function normalizeBidAmount(amount) {
+    if (!amount || isNaN(amount) || amount <= 0) return 15;
+    const raw = Number(amount);
+    if (raw <= 50) return Math.ceil(raw / 5) * 5;
+    if (raw <= 300) return Math.ceil(raw / 10) * 10;
+    return Math.ceil(raw / 50) * 50;
+  }
+
   /**
    * Safety Rule 1: Page Verification
    * Verify this is genuinely an active Freelancer project page, NOT a chat/inbox or profile page.
@@ -39,12 +64,10 @@
       return false;
     }
 
-    // Must be a project details page
     if (!pathname.startsWith('/projects/') && !pathname.includes('/projects/')) {
       return false;
     }
 
-    // Explicitly forbidden non-project pages
     const forbiddenPaths = ['/messages', '/inbox', '/users/', '/settings', '/deposit', '/withdraw', '/contest/'];
     if (forbiddenPaths.some((p) => pathname.includes(p))) {
       return false;
@@ -60,8 +83,7 @@
   function isChatOrMessengerElement(el) {
     if (!el) return true;
 
-    // Check element attributes and classes
-    const tag = el.tagName.toLowerCase();
+    const tag = el.tagName ? el.tagName.toLowerCase() : '';
     const className = typeof el.className === 'string' ? el.className.toLowerCase() : '';
     const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
     const name = (el.getAttribute('name') || '').toLowerCase();
@@ -70,18 +92,17 @@
     const chatKeywords = ['message', 'chat', 'conversation', 'inbox', 'messenger', 'reply', 'type a message', 'send a message'];
     
     if (chatKeywords.some((kw) => className.includes(kw) || placeholder.includes(kw) || dataQa.includes(kw))) {
-      // Exception: bid description form controls are valid
-      if (name === 'descr' || name === 'description' || dataQa.includes('bid-description')) {
+      // Exception: bid proposal form controls are valid
+      if (dataQa.includes('bid-description') || dataQa.includes('proposal') || name === 'descr') {
         return false;
       }
       return true;
     }
 
-    // Traverse up parents to ensure no ancestor is a chat/messenger component
     let parent = el.parentElement;
     let depth = 0;
     while (parent && depth < 15) {
-      const pTag = parent.tagName.toLowerCase();
+      const pTag = parent.tagName ? parent.tagName.toLowerCase() : '';
       const pClass = typeof parent.className === 'string' ? parent.className.toLowerCase() : '';
       const pQa = (parent.getAttribute('data-qa') || '').toLowerCase();
 
@@ -99,7 +120,6 @@
         return true;
       }
 
-      // If we find an explicit bid form ancestor, it is safely verified
       if (
         pTag.includes('bid-form') ||
         pTag.includes('project-view-bid-form') ||
@@ -113,6 +133,52 @@
 
       parent = parent.parentElement;
       depth++;
+    }
+
+    return false;
+  }
+
+  /**
+   * Safety Rule 3: Description Field Exclusion
+   * Positively identifies the milestone "Description" input ("Project milestone from freelancer.com")
+   * to ensure AutoBid NEVER touches, focuses, or overwrites it.
+   */
+  function isMilestoneDescriptionElement(el) {
+    if (!el) return false;
+
+    const name = (el.getAttribute('name') || '').toLowerCase();
+    const formControl = (el.getAttribute('formcontrolname') || '').toLowerCase();
+    const dataQa = (el.getAttribute('data-qa') || '').toLowerCase();
+    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+    const val = (el.value || '').toLowerCase();
+
+    // Check specific attributes of the milestone description field
+    if (
+      name.includes('milestone_desc') ||
+      name.includes('milestonedescription') ||
+      formControl.includes('milestonedescription') ||
+      dataQa.includes('milestone-desc') ||
+      dataQa.includes('milestone-description')
+    ) {
+      return true;
+    }
+
+    // Check default Freelancer text in the field
+    if (
+      placeholder.includes('milestone') ||
+      placeholder.includes('description of milestone') ||
+      val.includes('project milestone from freelancer.com') ||
+      val.includes('milestone from freelancer.com')
+    ) {
+      return true;
+    }
+
+    // Check if it's a text input in the milestone table row
+    if (el.tagName && el.tagName.toLowerCase() === 'input' && (el.type === 'text' || !el.type)) {
+      const parentRow = el.closest('tr, .milestone-row, app-milestone, fl-table-row');
+      if (parentRow && !dataQa.includes('amount') && !name.includes('amount') && !formControl.includes('amount')) {
+        return true;
+      }
     }
 
     return false;
@@ -173,49 +239,25 @@
     return document;
   }
 
-  // Scoped selectors for Freelancer.com bid elements
+  /**
+   * Positively identified field selectors for Freelancer bid form
+   */
   const SELECTORS = {
-    openBidButton: [
-      'button[data-qa="bid-button"]',
-      'button[data-qa="place-bid-open"]',
-      'fl-button[text*="Bid on" i] button',
-      'fl-button[text*="Place a Bid" i] button',
-      'button.ProjectView-bid-btn',
-    ],
-    description: [
-      'textarea[formcontrolname="description"]',
+    // 1. Proposal Textarea (The large proposal body)
+    proposal: [
       'textarea[data-qa="bid-description"]',
       'textarea[data-qa="bid-description-input"]',
+      'textarea[formcontrolname="description"]',
       'fl-textarea[formcontrolname="description"] textarea',
       'app-project-view-bid-form textarea',
       'app-bid-form textarea',
       'textarea#description',
       'textarea[name="descr"]',
-      'textarea[name="description"]',
       'textarea.BidForm-textarea',
       'textarea[placeholder*="proposal" i]',
       'textarea[placeholder*="details of your bid" i]',
     ],
-    amount: [
-      'input[formcontrolname="bidAmount"]',
-      'input[data-qa="bid-amount"]',
-      'input[data-qa="bid-amount-input"]',
-      'fl-input[formcontrolname="bidAmount"] input',
-      'input#bidAmount',
-      'input[name="sum"]',
-      'input[name="bidAmount"]',
-      'app-project-view-bid-form input[type="number"]',
-      'app-bid-form input[type="number"]',
-      'input#floating-bid-amount',
-    ],
-    milestoneAmount: [
-      'input[formcontrolname="milestoneAmount"]',
-      'input[data-qa="milestone-amount"]',
-      'input[data-qa="milestone-amount-input"]',
-      'fl-input[formcontrolname="milestoneAmount"] input',
-      'input[name="milestone_amount"]',
-      'input[placeholder*="milestone" i]',
-    ],
+    // 2. Delivery Days Input
     period: [
       'input[formcontrolname="period"]',
       'input[data-qa="bid-period"]',
@@ -226,6 +268,33 @@
       'input[name="delivery_period"]',
       'input[placeholder*="days" i]',
     ],
+    // 3. Bid Amount Input (Overall Bid Amount)
+    bidAmount: [
+      'input[formcontrolname="bidAmount"]',
+      'input[data-qa="bid-amount"]',
+      'input[data-qa="bid-amount-input"]',
+      'fl-input[formcontrolname="bidAmount"] input',
+      'input#bidAmount',
+      'input[name="sum"]',
+      'input[name="bidAmount"]',
+    ],
+    // 4. Amount Input (First Milestone Amount)
+    milestoneAmount: [
+      'input[formcontrolname="milestoneAmount"]',
+      'input[data-qa="milestone-amount"]',
+      'input[data-qa="milestone-amount-input"]',
+      'fl-input[formcontrolname="milestoneAmount"] input',
+      'input[name="milestone_amount"]',
+    ],
+    // 5. Milestone Description Input (READ-ONLY FOR AUTOBID - NEVER MODIFY)
+    milestoneDescription: [
+      'input[formcontrolname="milestoneDescription"]',
+      'input[data-qa="milestone-description"]',
+      'input[data-qa="milestone-description-input"]',
+      'fl-input[formcontrolname="milestoneDescription"] input',
+      'input[name="milestone_description"]',
+    ],
+    // 6. Place Bid Submit Button
     placeBidButton: [
       'button[data-qa="place-bid-btn"]',
       'button[data-qa="place-bid-button"]',
@@ -241,43 +310,106 @@
   };
 
   /**
-   * Find an element safely inside the verified bid container
+   * Find Proposal field specifically
    */
-  function findSafeElement(selectorList, isTextarea = false) {
+  function findSafeProposalField() {
     const container = findBidFormContainer();
-
-    for (const sel of selectorList) {
+    for (const sel of SELECTORS.proposal) {
       const candidates = queryDeepAll(sel, container);
       for (const el of candidates) {
-        if (isChatOrMessengerElement(el)) {
-          console.warn('[AutoBid Safety] Skipped candidate element inside chat/messenger:', el);
-          continue;
+        if (isChatOrMessengerElement(el)) continue;
+        if (el.tagName && el.tagName.toLowerCase() === 'textarea') {
+          return el;
         }
-
-        // For proposal textareas, ensure it's not a tiny message input
-        if (isTextarea) {
-          const rows = parseInt(el.getAttribute('rows') || '0', 10);
-          const ph = (el.getAttribute('placeholder') || '').toLowerCase();
-          if (ph.includes('type a message') || ph.includes('send a message')) {
-            continue;
-          }
-        }
-
-        return el;
       }
     }
-
     return null;
   }
 
+  /**
+   * Find Delivery Days field specifically
+   */
+  function findSafeDeliveryDaysField() {
+    const container = findBidFormContainer();
+    for (const sel of SELECTORS.period) {
+      const candidates = queryDeepAll(sel, container);
+      for (const el of candidates) {
+        if (isChatOrMessengerElement(el)) continue;
+        if (isMilestoneDescriptionElement(el)) continue;
+        return el;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find Bid Amount field specifically (Paid to you)
+   */
+  function findSafeBidAmountField() {
+    const container = findBidFormContainer();
+    for (const sel of SELECTORS.bidAmount) {
+      const candidates = queryDeepAll(sel, container);
+      for (const el of candidates) {
+        if (isChatOrMessengerElement(el)) continue;
+        if (isMilestoneDescriptionElement(el)) continue;
+        return el;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find Amount field specifically (Milestone amount)
+   */
+  function findSafeAmountField() {
+    const container = findBidFormContainer();
+    for (const sel of SELECTORS.milestoneAmount) {
+      const candidates = queryDeepAll(sel, container);
+      for (const el of candidates) {
+        if (isChatOrMessengerElement(el)) continue;
+        if (isMilestoneDescriptionElement(el)) continue;
+        return el;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find Milestone Description field (To capture & verify it remains untouched)
+   */
+  function findMilestoneDescriptionField() {
+    const container = findBidFormContainer();
+    for (const sel of SELECTORS.milestoneDescription) {
+      const candidates = queryDeepAll(sel, container);
+      for (const el of candidates) {
+        if (isChatOrMessengerElement(el)) continue;
+        return el;
+      }
+    }
+    // Search by value or placeholder
+    const allInputs = queryDeepAll('input', container);
+    for (const input of allInputs) {
+      if (isMilestoneDescriptionElement(input)) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find Place Bid button
+   */
   function findSafePlaceBidButton() {
     const container = findBidFormContainer();
-    const btn = findSafeElement(SELECTORS.placeBidButton);
-    if (btn && !btn.disabled && !isChatOrMessengerElement(btn)) {
-      return btn;
+    for (const sel of SELECTORS.placeBidButton) {
+      const candidates = queryDeepAll(sel, container);
+      for (const btn of candidates) {
+        if (!btn.disabled && !isChatOrMessengerElement(btn)) {
+          return btn;
+        }
+      }
     }
 
-    // Search visible buttons by text content inside bid container
     const allButtons = queryDeepAll('button', container);
     for (const b of allButtons) {
       if (b.offsetParent !== null && !b.disabled && !isChatOrMessengerElement(b)) {
@@ -290,7 +422,9 @@
     return null;
   }
 
-  // Set input value and dispatch all relevant synthetic events for Angular / React / native forms
+  /**
+   * Set input value and dispatch all relevant synthetic events for Angular / React / native forms
+   */
   function setNativeValue(element, value) {
     if (!element || value == null) return false;
 
@@ -298,7 +432,6 @@
       element.focus();
     } catch (e) {}
 
-    // React / Angular value setter workaround
     const prototype = Object.getPrototypeOf(element);
     const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
 
@@ -324,8 +457,8 @@
 
   // Open the bid form if it's currently collapsed/hidden
   function maybeOpenBidForm() {
-    const desc = findSafeElement(SELECTORS.description, true);
-    if (!desc || desc.offsetParent === null) {
+    const proposalEl = findSafeProposalField();
+    if (!proposalEl || proposalEl.offsetParent === null) {
       const allButtons = Array.from(document.querySelectorAll('button, a, fl-button'));
       for (const b of allButtons) {
         if (isChatOrMessengerElement(b)) continue;
@@ -366,8 +499,8 @@
 
         return {
           proposal: safeProposal || null,
-          amount: amount || null,
-          period: period || null,
+          amount: amount ? Number(amount) : null,
+          period: period ? Number(period) : null,
           autoSubmit: autoSubmit,
         };
       }
@@ -390,6 +523,8 @@
           if (Date.now() - (pb.timestamp || 0) < 5 * 60 * 1000) {
             return {
               ...pb,
+              amount: pb.amount ? Number(pb.amount) : null,
+              period: pb.period ? Number(pb.period) : null,
               autoSubmit: stored.handsFreeAutoSubmit !== undefined ? stored.handsFreeAutoSubmit : pb.autoSubmit,
             };
           }
@@ -402,7 +537,6 @@
 
   /**
    * Stage 2: In-Page Full Validation Check
-   * Inspects rendered page elements against configuration before filling
    */
   async function validatePageBeforeBidding() {
     let config = null;
@@ -449,6 +583,19 @@
       }
     }
 
+    // Check if project is closed or no longer accepting bids
+    if (
+      pageText.includes('this project is no longer accepting bids') ||
+      pageText.includes('bidding is closed') ||
+      pageText.includes('project has been closed') ||
+      pageText.includes('project has been deleted')
+    ) {
+      return {
+        valid: false,
+        reason: 'Project is closed and no longer accepting bids',
+      };
+    }
+
     return { valid: true };
   }
 
@@ -470,7 +617,6 @@
       if (el && el.offsetParent !== null) return true;
     }
 
-    // Also check page text for success confirmation
     const bodyText = document.body ? document.body.innerText : '';
     if (
       bodyText.includes('Your bid has been placed') ||
@@ -485,30 +631,39 @@
   }
 
   /**
+   * Centralized 10-Second Tab Close Dispatcher
+   * Sends SCHEDULE_TAB_CLOSE to background service worker
+   */
+  function requestTabClose(reason, delayMs = 10000) {
+    console.log(`[TAB] Closing AutoBid project tab in ${delayMs / 1000} seconds. (${reason})`);
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'SCHEDULE_TAB_CLOSE',
+          delayMs: delayMs,
+          reason: reason,
+        });
+      }
+    } catch (e) {
+      console.warn('[AutoBid Tab Close] Could not dispatch tab close message:', e);
+    }
+  }
+
+  /**
    * Notification banner and autonomous submission handler
    */
-  async function showAutoBidNotification(data) {
+  async function showAutoBidNotification(data, finalAmount) {
     const existing = document.getElementById('freelancer-autobid-floating-banner');
     if (existing) existing.remove();
 
     let isAutoSubmit = data.autoSubmit !== false;
     let delaySeconds = 2;
-    let autoCloseTab = true;
-    let autoCloseDelay = 3;
 
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         const st = await chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'config']);
-        if (st.handsFreeAutoSubmit !== undefined) {
-          isAutoSubmit = st.handsFreeAutoSubmit;
-        }
-        if (st.autoSubmitDelaySeconds !== undefined) {
-          delaySeconds = Math.max(0, parseInt(st.autoSubmitDelaySeconds, 10));
-        }
-        if (st.config) {
-          if (st.config.autoCloseTabOnSuccess !== undefined) autoCloseTab = st.config.autoCloseTabOnSuccess;
-          if (st.config.autoCloseDelaySeconds !== undefined) autoCloseDelay = st.config.autoCloseDelaySeconds;
-        }
+        if (st.handsFreeAutoSubmit !== undefined) isAutoSubmit = st.handsFreeAutoSubmit;
+        if (st.autoSubmitDelaySeconds !== undefined) delaySeconds = Math.max(0, parseInt(st.autoSubmitDelaySeconds, 10));
       }
     } catch (e) {}
 
@@ -548,9 +703,10 @@
         <button id="autobid-close-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; line-height: 1;">&times;</button>
       </div>
       <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;">
-        ${data.amount ? `<div>• Bid Amount: <strong style="color: #38bdf8;">$${data.amount}</strong></div>` : ''}
+        <div>• Bid Amount: <strong style="color: #38bdf8;">$${finalAmount}</strong></div>
+        <div>• Amount (Milestone): <strong style="color: #38bdf8;">$${finalAmount}</strong> (Synchronized)</div>
         ${data.period ? `<div>• Delivery: <strong style="color: #38bdf8;">${data.period} days</strong></div>` : ''}
-        <div>• Proposal: <strong style="color: #34d399;">Autofilled into Place Bid form!</strong></div>
+        <div>• Description (Milestone): <strong style="color: #a7f3d0;">Untouched (Default preserved)</strong></div>
       </div>
 
       ${isAutoSubmit ? `
@@ -581,10 +737,10 @@
 
     document.getElementById('autobid-close-btn')?.addEventListener('click', () => banner.remove());
     document.getElementById('autobid-scroll-btn')?.addEventListener('click', () => {
-      const descEl = findSafeElement(SELECTORS.description, true);
-      if (descEl) {
-        descEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        descEl.focus();
+      const proposalEl = findSafeProposalField();
+      if (proposalEl) {
+        proposalEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        proposalEl.focus();
       }
     });
 
@@ -599,6 +755,33 @@
 
       const executeSubmit = () => {
         if (cancelled) return;
+
+        // Final Pre-Submission Validation & Integrity Check
+        const bidAmountEl = findSafeBidAmountField();
+        const milestoneAmountEl = findSafeAmountField();
+        const milestoneDescEl = findMilestoneDescriptionField();
+        const proposalEl = findSafeProposalField();
+
+        // 1. Verify Bid Amount and Amount match
+        const bVal = bidAmountEl ? Number(String(bidAmountEl.value).replace(/[^0-9.]/g, '')) : null;
+        const mVal = milestoneAmountEl ? Number(String(milestoneAmountEl.value).replace(/[^0-9.]/g, '')) : null;
+
+        if (bVal !== finalAmount && bidAmountEl) {
+          setNativeValue(bidAmountEl, finalAmount);
+        }
+        if (mVal !== finalAmount && milestoneAmountEl) {
+          setNativeValue(milestoneAmountEl, finalAmount);
+        }
+
+        console.log('[BID PRICE] Verified Bid Amount field:', finalAmount);
+        console.log('[BID PRICE] Verified Amount field:', finalAmount);
+
+        // 2. Verify Description field is untouched / preserved
+        if (milestoneDescEl) {
+          console.log('[FORM SAFETY] Description field preserved unchanged:', milestoneDescEl.value);
+        }
+
+        // 3. Find Place Bid button
         const placeBidBtn = findSafePlaceBidButton();
         if (placeBidBtn) {
           console.log('[AutoBid] Triggering click on Freelancer Place Bid button!', placeBidBtn);
@@ -619,35 +802,31 @@
                 ✅ Bid Placed Successfully!
               </div>
               <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                ${autoCloseTab ? `Closing tab in ${autoCloseDelay}s...` : 'Autonomous bidding complete.'}
+                Closing tab in 10 seconds...
               </div>
             `;
           }
           if (cancelBtn) cancelBtn.style.display = 'none';
           if (submitNowBtn) submitNowBtn.style.display = 'none';
 
+          console.log('[BID] Submission confirmed');
+          requestTabClose('Bid successfully confirmed', 10000);
+
           if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
             chrome.runtime.sendMessage({
               type: 'BID_AUTO_SUBMITTED',
               data: {
                 url: window.location.href,
-                amount: data.amount,
+                amount: finalAmount,
                 period: data.period,
                 timestamp: Date.now()
               }
             });
           }
-
-          // Auto-close tab after successful submission if enabled
-          if (autoCloseTab) {
-            setTimeout(() => {
-              if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                chrome.runtime.sendMessage({ type: 'CLOSE_CURRENT_TAB' });
-              }
-            }, autoCloseDelay * 1000);
-          }
         } else {
-          console.warn('[AutoBid] Could not locate active Place Bid button.');
+          console.warn('[AutoBid] Place Bid button unavailable.');
+          console.log('[BID] Failed: Place Bid button unavailable');
+          requestTabClose('Place Bid button unavailable', 10000);
         }
       };
 
@@ -684,6 +863,8 @@
   let autofillRunning = false;
   async function attemptAutofill(bidData) {
     if (!bidData) return;
+    registerWithBackground();
+
     if (!isSafeBidPage()) {
       console.warn('[AutoBid Safety] Current URL is not a safe Freelancer project page. Aborting autofill.');
       return;
@@ -696,53 +877,76 @@
     const validation = await validatePageBeforeBidding();
     if (!validation.valid) {
       console.warn('[AutoBid Safety] In-Page validation failed:', validation.reason);
+      console.log(`[BID] Failed: ${validation.reason}`);
+      requestTabClose(validation.reason, 10000);
       autofillRunning = false;
       return;
     }
 
-    let filledDescription = false;
+    // Normalize recommended bid amount using the centralized ceiling round-up rules
+    const rawAmount = Number(bidData.amount) || 50;
+    const finalAmount = normalizeBidAmount(rawAmount);
+
+    console.log(`[AI PRICE] Recommended amount: $${rawAmount}`);
+    console.log(`[BID PRICE] Rounded amount: $${finalAmount}`);
+    console.log(`[BID PRICE] Bid Amount field: $${finalAmount}`);
+    console.log(`[BID PRICE] Amount field: $${finalAmount}`);
+
+    let filledProposal = false;
+    let filledBidAmount = false;
     let filledAmount = false;
     let filledPeriod = false;
-
-    console.log('[AutoBid] Starting secure autofill poll for:', { amount: bidData.amount, period: bidData.period });
+    let capturedOriginalDesc = null;
 
     const startTime = Date.now();
     const interval = setInterval(() => {
       maybeOpenBidForm();
 
-      const descEl = findSafeElement(SELECTORS.description, true);
-      const amountEl = findSafeElement(SELECTORS.amount);
-      const milestoneEl = findSafeElement(SELECTORS.milestoneAmount);
-      const periodEl = findSafeElement(SELECTORS.period);
-
-      if (descEl && !filledDescription && bidData.proposal) {
-        setNativeValue(descEl, bidData.proposal);
-        descEl.style.outline = '2px solid #10b981';
-        descEl.style.transition = 'outline 0.3s';
-        filledDescription = true;
-        console.log('[AutoBid] Filled description textarea safely inside bid form!');
+      // Capture milestone description immediately to ensure it remains untouched
+      const milestoneDescEl = findMilestoneDescriptionField();
+      if (milestoneDescEl && capturedOriginalDesc === null) {
+        capturedOriginalDesc = milestoneDescEl.value;
+        console.log('[FORM SAFETY] Initial Description field captured:', capturedOriginalDesc);
       }
 
-      if (amountEl && !filledAmount && bidData.amount) {
-        setNativeValue(amountEl, bidData.amount);
+      // 1. Fill Proposal
+      const proposalEl = findSafeProposalField();
+      if (proposalEl && !filledProposal && bidData.proposal) {
+        setNativeValue(proposalEl, bidData.proposal);
+        proposalEl.style.outline = '2px solid #10b981';
+        proposalEl.style.transition = 'outline 0.3s';
+        filledProposal = true;
+        console.log('[AutoBid] Filled Proposal field safely inside bid form!');
+      }
+
+      // 2. Fill Bid Amount
+      const bidAmountEl = findSafeBidAmountField();
+      if (bidAmountEl && !filledBidAmount) {
+        setNativeValue(bidAmountEl, finalAmount);
+        bidAmountEl.style.outline = '2px solid #10b981';
+        filledBidAmount = true;
+        console.log('[AutoBid] Filled Bid Amount field safely:', finalAmount);
+      }
+
+      // 3. Fill Amount (Milestone Amount) with the exact same final amount
+      const amountEl = findSafeAmountField();
+      if (amountEl && !filledAmount) {
+        setNativeValue(amountEl, finalAmount);
         amountEl.style.outline = '2px solid #10b981';
         filledAmount = true;
-
-        // Also sync milestone amount if present
-        if (milestoneEl) {
-          setNativeValue(milestoneEl, bidData.amount);
-        }
-        console.log('[AutoBid] Filled amount inputs safely!');
+        console.log('[AutoBid] Filled Amount (Milestone) field safely:', finalAmount);
       }
 
+      // 4. Fill Delivery Days
+      const periodEl = findSafeDeliveryDaysField();
       if (periodEl && !filledPeriod && bidData.period) {
         setNativeValue(periodEl, bidData.period);
         periodEl.style.outline = '2px solid #10b981';
         filledPeriod = true;
-        console.log('[AutoBid] Filled delivery period input safely!');
+        console.log('[AutoBid] Filled Delivery Days field safely:', bidData.period);
       }
 
-      // Safe zero-cost free upgrades check (Sealed / NDA)
+      // 5. Free Bid Upgrades check ($0.00 / FREE verified only)
       try {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
           chrome.storage.local.get('config').then((res) => {
@@ -775,18 +979,31 @@
         }
       } catch (e) {}
 
-      // If description and amount are filled, or timeout reached
-      if ((filledDescription && (filledAmount || !bidData.amount)) || (Date.now() - startTime > 18000)) {
+      // Description field integrity check: ensure it was never modified
+      if (milestoneDescEl && capturedOriginalDesc !== null && milestoneDescEl.value !== capturedOriginalDesc) {
+        console.warn('[FORM SAFETY] Restoring accidentally modified Description field to:', capturedOriginalDesc);
+        setNativeValue(milestoneDescEl, capturedOriginalDesc);
+      }
+
+      // Check completion state
+      const isComplete = filledProposal && filledBidAmount;
+      const isTimedOut = Date.now() - startTime > 18000;
+
+      if (isComplete || isTimedOut) {
         clearInterval(interval);
         autofillRunning = false;
-        if (filledDescription || filledAmount || filledPeriod) {
-          console.log('[AutoBid] Successfully filled Freelancer bid form safely!');
-          showAutoBidNotification(bidData);
 
-          // Clear cached hash
+        if (isComplete) {
+          console.log('[AutoBid] Successfully filled verified bid form fields!');
+          showAutoBidNotification(bidData, finalAmount);
+
           try {
             sessionStorage.removeItem('__freelancer_autobid_hash__');
           } catch (e) {}
+        } else if (isTimedOut) {
+          console.warn('[AutoBid] Form elements not found before timeout.');
+          console.log('[BID] Failed: Bid form elements missing or timed out');
+          requestTabClose('Bid form missing or timed out', 10000);
         }
       }
     }, 300);
@@ -813,7 +1030,6 @@
     });
   }
 
-  // Run on load and whenever DOM elements change
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

@@ -7,6 +7,8 @@
  * Proposals are generated exclusively via OpenAI API using the user's custom markdown rules.
  */
 
+import { normalizeBidAmount } from './pricing.ts';
+
 export interface GenerateProposalParams {
   projectTitle: string;
   projectDescription: string;
@@ -167,15 +169,30 @@ ${useAiPricing ? 'Generate the JSON object now following the prompt rules strict
     try {
       const parsed = JSON.parse(rawText);
       const proposal = cleanProposalText(parsed.proposal || rawText);
-      let bidAmount = Number(parsed.recommendedBidAmount);
+      let rawBidAmount = Number(parsed.recommendedBidAmount);
       let deliveryDays = parseInt(parsed.recommendedDeliveryDays, 10);
 
-      if (isNaN(bidAmount) || bidAmount < params.budget.minimum || bidAmount > params.budget.maximum) {
-        bidAmount = defaultAmount;
+      if (isNaN(rawBidAmount) || rawBidAmount <= 0) {
+        rawBidAmount = defaultAmount;
       }
+
+      // Apply centralized ceiling round-up normalization
+      let normalizedBidAmount = normalizeBidAmount(rawBidAmount);
+
+      // Keep within budget constraints if maximum specified
+      if (params.budget.maximum > 0 && normalizedBidAmount > params.budget.maximum && params.budget.maximum >= params.budget.minimum) {
+        normalizedBidAmount = params.budget.maximum;
+      }
+      if (params.budget.minimum > 0 && normalizedBidAmount < params.budget.minimum) {
+        normalizedBidAmount = normalizeBidAmount(params.budget.minimum);
+      }
+
       if (isNaN(deliveryDays) || deliveryDays < 1) {
         deliveryDays = defaultDays;
       }
+
+      const pricingLog = `[AI PRICE] Recommended amount: $${rawBidAmount} | [BID PRICE] Rounded amount: $${normalizedBidAmount}`;
+      console.log(`[FreelancerAutoBid Pricing] ${pricingLog}`);
 
       return {
         proposal,
@@ -183,9 +200,11 @@ ${useAiPricing ? 'Generate the JSON object now following the prompt rules strict
         modelUsed: modelName,
         wordCount: proposal.split(/\s+/).filter(Boolean).length,
         tokensUsed: data.usage?.total_tokens,
-        recommendedBidAmount: Math.round(bidAmount),
+        recommendedBidAmount: normalizedBidAmount,
         recommendedDeliveryDays: deliveryDays,
-        pricingReasoning: parsed.pricingReasoning || `AI-selected optimal price within ${params.budget.currency} ${params.budget.minimum}-${params.budget.maximum}`,
+        pricingReasoning: parsed.pricingReasoning
+          ? `${parsed.pricingReasoning} (${pricingLog})`
+          : pricingLog,
         ctaQuestion: parsed.ctaQuestion,
       };
     } catch (jsonErr) {
@@ -195,13 +214,14 @@ ${useAiPricing ? 'Generate the JSON object now following the prompt rules strict
 
   const proposal = cleanProposalText(rawText);
   const words = proposal.split(/\s+/).filter(Boolean).length;
+  const normalizedDefault = normalizeBidAmount(defaultAmount);
   return {
     proposal,
     proposalSource: 'openai',
     modelUsed: modelName,
     wordCount: words,
     tokensUsed: data.usage?.total_tokens,
-    recommendedBidAmount: defaultAmount,
+    recommendedBidAmount: normalizedDefault,
     recommendedDeliveryDays: defaultDays,
   };
 }

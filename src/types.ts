@@ -86,8 +86,8 @@ export interface FilterConfig {
   autoSubmitDelaySeconds: number; // Countdown seconds before auto-clicking (e.g. 2s)
   autoOpenQualified: boolean; // Autonomously open and submit qualified projects as they arrive
   autoCloseTabOnSuccess: boolean; // Automatically close project tab after bid is successfully submitted
-  autoCloseDelaySeconds: number; // Delay before closing successful project tab (e.g. 3s)
-  closeTabOnFailure: boolean; // Automatically close tab if project fails in-page safety or validation
+  autoCloseDelaySeconds: number; // Delay before closing successful project tab (10s)
+  closeTabOnFailure: boolean; // Automatically close tab if project fails in-page safety or validation (10s)
 }
 
 export const DEFAULT_CONFIG: FilterConfig = {
@@ -175,9 +175,9 @@ HARD RULES:
   handsFreeAutoSubmit: true, // Auto-clicks 'Place Bid' button on Freelancer without human touch
   autoSubmitDelaySeconds: 2, // 2-second countdown before auto-submit
   autoOpenQualified: true, // Automatically opens matched projects in a new tab for instant bidding
-  autoCloseTabOnSuccess: true, // Closes tab after success
-  autoCloseDelaySeconds: 3, // 3-second delay before tab closes so user can see success
-  closeTabOnFailure: false,
+  autoCloseTabOnSuccess: true, // Closes tab after success (10s delay)
+  autoCloseDelaySeconds: 10, // 10-second delay before tab closes so user can see success / confirmed state
+  closeTabOnFailure: true, // Automatically close tab after 10s if project fails or is ineligible
 };
 
 export interface BidLog {

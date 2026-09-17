@@ -560,14 +560,14 @@ export const BiddingBehaviourPage: React.FC = () => {
             </label>
           </div>
 
-          {/* Auto-Close Tab on Success */}
+          {/* Auto-Close Tab on Success & Terminal Failure */}
           <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex items-start justify-between gap-3">
             <div>
               <span className="text-xs font-semibold text-slate-900 block">
-                Auto-Close on Success
+                Auto-Close AutoBid Tabs
               </span>
               <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                Closes completed tab after successful bid placement ({config.autoCloseDelaySeconds || 3}s).
+                Closes AutoBid-opened project tabs 10s after processing (success or terminal failure).
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
@@ -575,7 +575,7 @@ export const BiddingBehaviourPage: React.FC = () => {
                 id="auto-close-tab-toggle"
                 type="checkbox"
                 checked={config.autoCloseTabOnSuccess !== false}
-                onChange={(e) => handleUpdate({ autoCloseTabOnSuccess: e.target.checked })}
+                onChange={(e) => handleUpdate({ autoCloseTabOnSuccess: e.target.checked, closeTabOnFailure: e.target.checked })}
                 className="sr-only peer"
               />
               <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-600"></div>
