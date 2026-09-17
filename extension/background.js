@@ -25,7 +25,7 @@ const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 // Default configuration (defaults to Public Feed with NO OAuth token required)
 const DEFAULT_CONFIG = {
   autoBidEnabled: true,
-  dryRunMode: true, // Safe default: generates proposals and notifies without spending real bid credits
+  dryRunMode: false, // Live bidding ready
   pollIntervalSeconds: 30, // 30s or 60s (1 min)
   feedSource: 'auto', // 'auto' | 'rss' | 'public_api' (100% No OAuth required!)
   desktopNotifications: true,
@@ -34,12 +34,17 @@ const DEFAULT_CONFIG = {
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
   mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry', 'Web Development', 'Full Stack Development'],
+  minMatchingSkills: 1,
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
+  blockedCountries: [],
+  allowedLanguages: ['English', 'ALL'],
+  blockedCategories: ['Adult Content', 'Academic Writing', 'Illegal Activities'],
   minBudget: 15,
   maxBudget: 5000,
   allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
   requirePaymentVerified: false, // Default false so public feed projects aren't rejected
   minClientRating: 4.0,
+  minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
   ctaQuestion: '',
@@ -70,6 +75,9 @@ HARD RULES:
   handsFreeAutoSubmit: true,
   autoSubmitDelaySeconds: 2,
   autoOpenQualified: true,
+  autoCloseTabOnSuccess: true,
+  autoCloseDelaySeconds: 3,
+  closeTabOnFailure: false,
 };
 
 // In-memory runtime cache
@@ -137,7 +145,7 @@ if (chrome.notifications && chrome.notifications.onClicked) {
   });
 }
 
-// Message Listener from Popup / Dashboard
+// Message Listener from Popup / Dashboard / Content Script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_STATUS') {
     sendResponse({
@@ -153,6 +161,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ config: activeConfig });
     setupPollingAlarm(activeConfig.pollIntervalSeconds);
     sendResponse({ success: true, activeConfig });
+    return true;
+  }
+
+  if (message.type === 'CLOSE_CURRENT_TAB') {
+    if (sender.tab && sender.tab.id) {
+      console.log('[FreelancerAutoBid] Auto-closing completed tab:', sender.tab.id);
+      chrome.tabs.remove(sender.tab.id);
+    }
+    sendResponse({ success: true });
     return true;
   }
 
@@ -238,20 +255,62 @@ async function runPollingCycle() {
         continue;
       }
 
+      // Check Active Hours
+      const fromH = activeConfig.activeHoursFrom ?? 0;
+      const toH = activeConfig.activeHoursTo ?? 24;
+      const curH = new Date().getHours();
+      const inWindow = (fromH === 0 && toH === 24) ||
+        (fromH < toH && curH >= fromH && curH < toH) ||
+        (fromH > toH && (curH >= fromH || curH < toH));
+
+      if (!inWindow) {
+        console.log(`[FreelancerAutoBid] Outside active hours (${fromH}:00 - ${toH}:00). Skipping bid placement.`);
+        project.status = 'SKIPPED';
+        project.skipReason = `Outside active hours (${fromH}:00 - ${toH}:00)`;
+        await recordProjectResult(project);
+        processedIds.add(project.id);
+        continue;
+      }
+
       // Project Qualified!
       project.status = 'QUALIFIED';
       project.matchedTags = evalResult.matchedTags;
 
-      // Calculate Bid Amount
+      // Calculate Bid Amount according to strategy & tiers
       const maxBudget = project.budget?.maximum || activeConfig.minBudget;
       const minBudget = project.budget?.minimum || activeConfig.minBudget;
-      const bidAmount = Math.max(
-        minBudget,
-        Math.round(maxBudget * (activeConfig.bidPercentageOfMaxBudget / 100))
-      );
+      let bidAmount = minBudget;
+      let bidDays = activeConfig.defaultDeliveryDays || 5;
+
+      if (activeConfig.budgetTiersEnabled && activeConfig.budgetTiers && activeConfig.budgetTiers.length > 0) {
+        const matchedTier = activeConfig.budgetTiers.find((t) => maxBudget >= t.minBudget && minBudget <= t.maxBudget);
+        if (matchedTier) {
+          bidAmount = Math.round(maxBudget * ((matchedTier.bidPercentage || 85) / 100));
+          bidDays = matchedTier.deliveryDays || bidDays;
+        } else {
+          bidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
+        }
+      } else {
+        switch (activeConfig.bidStrategy) {
+          case 'low_end':
+            bidAmount = minBudget;
+            break;
+          case 'midpoint':
+            bidAmount = Math.round((minBudget + maxBudget) / 2);
+            break;
+          case 'fixed':
+            bidAmount = activeConfig.fixedBidAmount || 50;
+            break;
+          case 'percentage_max':
+          default:
+            bidAmount = Math.round(maxBudget * ((activeConfig.bidPercentageOfMaxBudget || 85) / 100));
+            break;
+        }
+      }
+      bidAmount = Math.max(minBudget, Math.min(bidAmount, maxBudget));
 
       project.bidAmount = bidAmount;
-      project.bidPeriodDays = activeConfig.defaultDeliveryDays;
+      project.bidPeriodDays = bidDays;
 
       // Generate AI Proposal with OpenAI according to user custom markdown prompt rules
       let proposal = '';
@@ -529,37 +588,68 @@ async function fetchActiveFreelancerProjects() {
 }
 
 /**
- * Local Qualification Filtering Logic
+ * Local Qualification Filtering Logic (Stage 1)
  */
 function evaluateQualification(project, config) {
-  const fullText = `${project.title} ${project.description}`.toLowerCase();
-  const jobNames = (project.jobs || []).map((j) => j.name.toLowerCase());
+  const fullText = `${project.title || ''} ${project.description || ''}`.toLowerCase();
+  const jobNames = (project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '').toLowerCase());
 
-  // 1. Mandatory Platform Check: Require explicit tech tags
-  const matchedTags = config.mandatorySkills.filter((skill) => {
-    const sLower = skill.toLowerCase();
-    return jobNames.some((j) => j.includes(sLower)) || fullText.includes(sLower);
-  });
-
-  if (matchedTags.length === 0) {
-    return { qualified: false, reason: 'Ineligible: Missing mandatory platform tech tags' };
+  // 1. Blocked Countries Check
+  if (config.blockedCountries && config.blockedCountries.length > 0 && project.client?.country) {
+    const clientCountry = project.client.country.trim().toLowerCase();
+    const isBlocked = config.blockedCountries.some((c) => {
+      const cLower = c.trim().toLowerCase();
+      return cLower && (clientCountry === cLower || clientCountry.includes(cLower));
+    });
+    if (isBlocked) {
+      return { qualified: false, reason: `Disqualified: Blocked client country (${project.client.country})` };
+    }
   }
 
-  // 2. Negative Keyword Blacklist
-  const matchedBlacklist = config.negativeKeywords.filter((neg) => {
-    const nLower = neg.toLowerCase();
-    return fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower));
-  });
-
-  if (matchedBlacklist.length > 0) {
-    return {
-      qualified: false,
-      reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
-      matchedBlacklist,
-    };
+  // 2. Blocked Categories Check
+  if (config.blockedCategories && config.blockedCategories.length > 0) {
+    const matchedBlockedCategory = config.blockedCategories.find((cat) => {
+      const catLower = cat.trim().toLowerCase();
+      return catLower && (jobNames.some((j) => j.includes(catLower)) || fullText.includes(catLower));
+    });
+    if (matchedBlockedCategory) {
+      return { qualified: false, reason: `Discarded: Blocked category match (${matchedBlockedCategory})` };
+    }
   }
 
-  // 3. Budget & Client Qualification
+  // 3. Mandatory Platform Check: Require explicit tech tags
+  const matchedTags = [];
+  if (config.mandatorySkills && config.mandatorySkills.length > 0) {
+    for (const skill of config.mandatorySkills) {
+      const sLower = skill.trim().toLowerCase();
+      if (!sLower) continue;
+      const matched = jobNames.some((j) => j === sLower || j.includes(sLower) || sLower.includes(j)) || fullText.includes(sLower);
+      if (matched) matchedTags.push(skill);
+    }
+
+    const minReq = Math.max(1, config.minMatchingSkills || 1);
+    if (matchedTags.length < minReq) {
+      return { qualified: false, reason: `Ineligible: Missing mandatory tech skills (Matched ${matchedTags.length}/${minReq})` };
+    }
+  }
+
+  // 4. Negative Keyword Blacklist
+  if (config.negativeKeywords && config.negativeKeywords.length > 0) {
+    const matchedBlacklist = config.negativeKeywords.filter((neg) => {
+      const nLower = neg.trim().toLowerCase();
+      return nLower && (fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower)));
+    });
+
+    if (matchedBlacklist.length > 0) {
+      return {
+        qualified: false,
+        reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
+        matchedBlacklist,
+      };
+    }
+  }
+
+  // 5. Budget & Client Qualification
   if (project.budget.maximum > 0 && project.budget.maximum < config.minBudget) {
     return { qualified: false, reason: `Budget below minimum ($${project.budget.maximum} < $${config.minBudget})` };
   }
@@ -636,7 +726,7 @@ async function generateAiProposal(project, config) {
 
   const userPrompt = `Project Title: ${project.title}
 Budget: ${project.budget.minimum} - ${project.budget.maximum} ${project.budget.currency}
-Required Skills: ${(project.jobs || []).map((j) => j.name).join(', ')}
+Required Skills: ${(project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '')).join(', ')}
 
 Job Description:
 """
@@ -669,7 +759,14 @@ Generate the proposal now following the markdown rules strictly:`;
 
   const data = await response.json();
   const rawProposal = data.choices?.[0]?.message?.content?.trim() || '';
-  const cleaned = rawProposal.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  let cleaned = rawProposal.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  // Enforce Line 1: "Hi" alone
+  const lines = cleaned.split('\n');
+  if (lines.length > 0 && lines[0].trim().toLowerCase().startsWith('hi')) {
+    lines[0] = 'Hi';
+    cleaned = lines.join('\n');
+  }
 
   if (!cleaned) {
     throw new Error('OpenAI returned an empty response.');

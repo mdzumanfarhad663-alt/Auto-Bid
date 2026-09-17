@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { FreelancerProject, FilterConfig, BidLog, SystemStats, DEFAULT_CONFIG } from '../types.ts';
+import { FreelancerProject, FilterConfig, BidLog, SystemStats, DashboardData, DEFAULT_CONFIG } from '../types.ts';
 import { generateProposal } from './openai.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -173,12 +173,316 @@ class ProjectStore {
     this.persist();
   }
 
+  public getDashboardData(): DashboardData {
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const startOfMonthMs = startOfMonth.getTime();
+
+    const bids = this.state.bids || [];
+    const projects = this.state.projects || [];
+
+    // Filter calculations
+    const bidsToday = bids.filter((b) => (b.timestamp || 0) >= startOfTodayMs).length;
+    const scansToday = projects.filter((p) => (p.submitDate || 0) >= startOfTodayMs).length;
+
+    const bidsThisWeek = bids.filter((b) => (b.timestamp || 0) >= oneWeekAgo).length;
+    const scansThisWeek = projects.filter((p) => (p.submitDate || 0) >= oneWeekAgo).length;
+
+    const bidsThisMonth = bids.filter((b) => (b.timestamp || 0) >= startOfMonthMs).length;
+    const scansThisMonth = projects.filter((p) => (p.submitDate || 0) >= startOfMonthMs).length;
+
+    const bidsAllTime = Math.max(this.state.stats.totalBidsPlaced || 0, bids.length);
+    const scansAllTime = Math.max(this.state.stats.totalScanned || 0, projects.length);
+
+    // 24H activity points (-24h, -18h, -12h, -6h, Now)
+    const intervals = [
+      { label: '-24h', start: now - 24 * 3600000, end: now - 18 * 3600000 },
+      { label: '-18h', start: now - 18 * 3600000, end: now - 12 * 3600000 },
+      { label: '-12h', start: now - 12 * 3600000, end: now - 6 * 3600000 },
+      { label: '-6h', start: now - 6 * 3600000, end: now - 1 * 3600000 },
+      { label: 'Now', start: now - 1 * 3600000, end: now + 60000 },
+    ];
+
+    const activityPoints = intervals.map((int) => {
+      const scansInSlot = projects.filter((p) => (p.submitDate || 0) >= int.start && (p.submitDate || 0) <= int.end).length;
+      const bidsInSlot = bids.filter((b) => (b.timestamp || 0) >= int.start && (b.timestamp || 0) <= int.end).length;
+      return {
+        label: int.label,
+        scans: scansInSlot,
+        bids: bidsInSlot,
+      };
+    });
+
+    const totalBids24h = bids.filter((b) => (b.timestamp || 0) >= oneDayAgo).length;
+    const totalScans24h = projects.filter((p) => (p.submitDate || 0) >= oneDayAgo).length;
+
+    // Recent bids formatted
+    const recentBids = bids.slice(0, 10).map((b) => {
+      const matchedProj = projects.find((p) => p.id === b.projectId);
+      const skills = matchedProj?.jobs?.map((j: any) => (typeof j === 'string' ? j : j.name)) || [
+        'React',
+        'WordPress',
+        'PHP',
+        'HTML',
+        'CSS',
+      ];
+
+      return {
+        id: b.id,
+        projectId: b.projectId,
+        projectTitle: b.projectTitle || matchedProj?.title || `Freelancer Project #${b.projectId}`,
+        projectUrl: matchedProj?.url || `https://www.freelancer.com/projects/${b.projectId}`,
+        projectType: (matchedProj?.title?.toLowerCase().includes('hourly') ? 'Hourly' : 'Fixed') as 'Fixed' | 'Hourly',
+        bidAmount: b.bidAmount || 50,
+        currency: b.currency || matchedProj?.budget?.currency || 'USD',
+        deliveryDays: b.deliveryDays || 3,
+        skills: skills.length > 0 ? skills : ['Web Development', 'PHP', 'HTML'],
+        timestamp: b.timestamp || Date.now(),
+        status: b.status,
+        reasonBadge: 'Already bid on this project in your account',
+      };
+    });
+
+    // Recent scans formatted
+    const recentScans = projects.slice(0, 10).map((p) => {
+      const isSkipped = p.status === 'SKIPPED';
+      const isBlacklisted = p.skipReason?.includes('Blacklisted') || (p.matchedBlacklist && p.matchedBlacklist.length > 0);
+      let eligibility: 'Ineligible' | 'Eligible' | 'Excluded by you' = 'Eligible';
+      if (isSkipped) {
+        eligibility = isBlacklisted ? 'Excluded by you' : 'Ineligible';
+      }
+
+      const skills = (p.jobs || []).map((j: any) => (typeof j === 'string' ? j : j.name));
+      const budgetFormatted = p.budget
+        ? `${p.budget.currency} ${p.budget.minimum} - ${p.budget.maximum}`
+        : 'Budget Undefined';
+
+      return {
+        id: p.id,
+        title: p.title,
+        url: p.url || `https://www.freelancer.com/projects/${p.id}`,
+        projectType: p.title?.toLowerCase().includes('hourly') ? 'Hourly' : 'Fixed',
+        budgetFormatted,
+        currency: p.budget?.currency || 'USD',
+        skills: skills.length > 0 ? skills : ['Web Development', 'JavaScript'],
+        timestamp: p.submitDate || Date.now(),
+        eligibility,
+        skipReason: p.skipReason || 'Matched all configured qualification filters and skill requirements.',
+      };
+    });
+
+    return {
+      user: {
+        name: 'Md zuman Farhad',
+        email: 'mdzumanfarhad663@gmail.com',
+        trialDaysLeft: 5,
+        extensionVersion: 'v1.0.29',
+        extensionStatus: this.state.config.autoBidEnabled ? 'running' : 'idle',
+      },
+      stats: {
+        bidsToday,
+        scansToday,
+        bidsThisWeek,
+        scansThisWeek,
+        bidsThisMonth,
+        scansThisMonth,
+        bidsAllTime,
+        scansAllTime,
+      },
+      comparisons: {
+        bidsWeekChange: bidsThisWeek,
+        scansWeekChange: scansThisWeek,
+      },
+      activity24h: {
+        points: activityPoints,
+        totalBids24h,
+        totalScans24h,
+      },
+      recentBids,
+      recentScans,
+    };
+  }
+
+
   /**
-   * Evaluates project against the 4 qualification rules:
-   * 1. Deduplication (already in processed list)
-   * 2. Mandatory Tech Tags check
-   * 3. Negative Keyword Blacklist check (in title or description)
-   * 4. Budget & Client Qualification (budget limits, currency, payment verification, rating)
+   * Helper to determine if current local time is inside active hours window
+   * Full 24h format support, including overnight ranges (e.g. From: 22 To: 6)
+   */
+  public isInsideActiveHours(fromHour = 0, toHour = 24, currentHour?: number): boolean {
+    const hour = currentHour !== undefined ? currentHour : new Date().getHours();
+    
+    // Full day coverage (0 to 24)
+    if (fromHour === 0 && toHour === 24) {
+      return true;
+    }
+
+    // Normal window (e.g. 9 to 17)
+    if (fromHour < toHour) {
+      return hour >= fromHour && hour < toHour;
+    }
+
+    // Overnight window (e.g. 22 to 6)
+    if (fromHour > toHour) {
+      return hour >= fromHour || hour < toHour;
+    }
+
+    // fromHour === toHour: exact 24h or single-hour window
+    return true;
+  }
+
+  /**
+   * Evaluates if system is currently permitted to place a bid according to timing,
+   * daily limits, active hours, and delay rules.
+   */
+  public canBidNow(): { allowed: boolean; reason?: string } {
+    const config = this.state.config;
+
+    if (!config.autoBidEnabled) {
+      return { allowed: false, reason: 'AutoBid is currently paused/disabled.' };
+    }
+
+    // 1. Check Active Hours Window
+    const fromHour = config.activeHoursFrom ?? 0;
+    const toHour = config.activeHoursTo ?? 24;
+    if (!this.isInsideActiveHours(fromHour, toHour)) {
+      return {
+        allowed: false,
+        reason: `[AUTOBID] Paused — outside configured active hours (${fromHour}:00 - ${toHour}:00).`,
+      };
+    }
+
+    // 2. Check Daily Bid Limit
+    const now = Date.now();
+    const startOfDayMs = new Date().setHours(0, 0, 0, 0);
+    const todayBids = this.state.bids.filter(
+      (b) => (b.timestamp || 0) >= startOfDayMs && (b.status === 'SUCCESS' || b.status === 'SIMULATED')
+    ).length;
+
+    const maxDaily = config.maxBidsPerDay || 40;
+    if (todayBids >= maxDaily) {
+      return {
+        allowed: false,
+        reason: `[AUTOBID] Daily bid limit reached (${todayBids}/${maxDaily} bids placed today).`,
+      };
+    }
+
+    // 3. Check Delay Between Consecutive Bids
+    const delaySeconds = config.delayBetweenBidsSeconds || 0;
+    if (delaySeconds > 0 && this.state.bids.length > 0) {
+      const lastBidTime = this.state.bids[0].timestamp || 0;
+      const elapsedSeconds = (now - lastBidTime) / 1000;
+      if (elapsedSeconds < delaySeconds) {
+        const remaining = Math.ceil(delaySeconds - elapsedSeconds);
+        return {
+          allowed: false,
+          reason: `[AUTOBID] Delay cooldown in effect (${remaining}s remaining).`,
+        };
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Resolves a single, definitive bid amount and delivery duration
+   * for both Freelancer 'bid_amount' and 'amount' fields.
+   */
+  public resolveBidAmount(project: FreelancerProject): {
+    amount: number;
+    deliveryDays: number;
+    formulaSummary: string;
+  } {
+    const config = this.state.config;
+    const min = project.budget.minimum || 15;
+    const max = project.budget.maximum || 500;
+
+    let amount = min;
+    let days = config.defaultDeliveryDays || 5;
+    let formulaSummary = 'No formula set — bids use the low end of the budget.';
+
+    // Check Budget Tiers first if enabled
+    if (config.budgetTiersEnabled && config.budgetTiers && config.budgetTiers.length > 0) {
+      const matchedTier = config.budgetTiers.find((tier) => max >= tier.minBudget && min <= tier.maxBudget);
+      if (matchedTier) {
+        const pct = matchedTier.bidPercentage || 85;
+        amount = Math.round(max * (pct / 100));
+        days = matchedTier.deliveryDays || days;
+        formulaSummary = `Tier rule (${pct}% of max budget, ${days} days)`;
+      }
+    } else {
+      switch (config.bidStrategy) {
+        case 'low_end':
+          amount = min;
+          formulaSummary = 'Bid = Minimum Budget';
+          break;
+        case 'midpoint':
+          amount = Math.round((min + max) / 2);
+          formulaSummary = 'Bid = Midpoint of Budget';
+          break;
+        case 'fixed':
+          amount = config.fixedBidAmount || 50;
+          formulaSummary = `Bid = Fixed ${project.budget.currency} ${amount}`;
+          break;
+        case 'percentage_max':
+        default:
+          const pct = config.bidPercentageOfMaxBudget || 85;
+          amount = Math.round(max * (pct / 100));
+          formulaSummary = `Bid = ${pct}% of Maximum Budget`;
+          break;
+      }
+    }
+
+    // Bound within project minimum and maximum
+    amount = Math.max(min, Math.min(amount, max));
+
+    return {
+      amount,
+      deliveryDays: days,
+      formulaSummary,
+    };
+  }
+
+  /**
+   * Helper to perform safe word-boundary or exact skill matching
+   */
+  private matchSkill(skill: string, jobNames: string[], fullText: string): boolean {
+    const sLower = skill.trim().toLowerCase();
+    if (!sLower) return false;
+
+    // Direct match against job tag names (e.g. "React.js" matches "react.js" or "react")
+    for (const j of jobNames) {
+      if (j === sLower || j.includes(sLower) || sLower.includes(j)) {
+        return true;
+      }
+    }
+
+    // Word boundary match in full description/title text to avoid false positives (e.g. "C" vs "CSS")
+    try {
+      const escaped = sLower.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+      return regex.test(fullText);
+    } catch {
+      return fullText.includes(sLower);
+    }
+  }
+
+  /**
+   * Evaluates project against all qualification rules:
+   * 0. Deduplication (already in processed list)
+   * 1. Blocked Countries check
+   * 2. Blocked Project Categories check
+   * 3. Mandatory Tech Tags check (with precise matching and minimum count threshold)
+   * 4. Negative Keyword Blacklist check
+   * 5. Budget & Currency Normalization in USD
+   * 6. Client Rating, Reviews, and Payment Verification
    */
   public evaluateProject(project: FreelancerProject): {
     qualified: boolean;
@@ -193,40 +497,80 @@ class ProjectStore {
       return { qualified: false, reason: 'Already processed (Deduplication)' };
     }
 
-    const jobNames = project.jobs.map((j) => j.name.toLowerCase());
-    const fullText = `${project.title} ${project.description}`.toLowerCase();
+    const jobNames = (project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '').toLowerCase());
+    const fullText = `${project.title || ''} ${project.description || ''}`.toLowerCase();
 
-    // Rule 1: Mandatory Platform Check (explicit tech tags)
-    const matchedTags = config.mandatorySkills.filter((skill) => {
-      const sLower = skill.toLowerCase();
-      return (
-        jobNames.some((j) => j.includes(sLower) || sLower.includes(j)) ||
-        fullText.includes(sLower)
-      );
-    });
-
-    if (matchedTags.length === 0) {
-      return {
-        qualified: false,
-        reason: 'Ineligible: Missing mandatory platform tech tags',
-      };
+    // Rule 1: Blocked Countries Check
+    if (config.blockedCountries && config.blockedCountries.length > 0 && project.client?.country) {
+      const clientCountry = project.client.country.trim().toLowerCase();
+      const isBlocked = config.blockedCountries.some((c) => {
+        const cLower = c.trim().toLowerCase();
+        return cLower && (clientCountry === cLower || clientCountry.includes(cLower));
+      });
+      if (isBlocked) {
+        return {
+          qualified: false,
+          reason: `Disqualified: Blocked client country (${project.client.country})`,
+        };
+      }
     }
 
-    // Rule 2: Negative Keyword Blacklist
-    const matchedBlacklist = config.negativeKeywords.filter((neg) => {
-      const nLower = neg.toLowerCase();
-      return fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower));
-    });
-
-    if (matchedBlacklist.length > 0) {
-      return {
-        qualified: false,
-        reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
-        matchedBlacklist,
-      };
+    // Rule 2: Blocked Project Categories Check
+    if (config.blockedCategories && config.blockedCategories.length > 0) {
+      const matchedBlockedCategory = config.blockedCategories.find((cat) => {
+        const catLower = cat.trim().toLowerCase();
+        return catLower && (jobNames.some((j) => j.includes(catLower)) || fullText.includes(catLower));
+      });
+      if (matchedBlockedCategory) {
+        return {
+          qualified: false,
+          reason: `Discarded: Blocked project category (${matchedBlockedCategory})`,
+        };
+      }
     }
 
-    // Rule 3: Budget & Currency Normalization in USD
+    // Rule 3: Mandatory Platform Tech Tags Check
+    const matchedTags: string[] = [];
+    if (config.mandatorySkills && config.mandatorySkills.length > 0) {
+      for (const skill of config.mandatorySkills) {
+        if (this.matchSkill(skill, jobNames, fullText)) {
+          matchedTags.push(skill);
+        }
+      }
+
+      const minReq = Math.max(1, config.minMatchingSkills || 1);
+      if (matchedTags.length < minReq) {
+        return {
+          qualified: false,
+          reason: `Ineligible: Missing mandatory tech skills (Matched ${matchedTags.length}/${minReq})`,
+        };
+      }
+    }
+
+    // Rule 4: Negative Keyword Blacklist
+    if (config.negativeKeywords && config.negativeKeywords.length > 0) {
+      const matchedBlacklist = config.negativeKeywords.filter((neg) => {
+        const nLower = neg.trim().toLowerCase();
+        if (!nLower) return false;
+        try {
+          const escaped = nLower.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+          return regex.test(fullText) || jobNames.some((j) => regex.test(j));
+        } catch {
+          return fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower));
+        }
+      });
+
+      if (matchedBlacklist.length > 0) {
+        return {
+          qualified: false,
+          reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
+          matchedBlacklist,
+        };
+      }
+    }
+
+    // Rule 5: Budget & Currency Normalization in USD
     const minInUSD = convertToUSD(project.budget.minimum, project.budget.currency);
     const maxInUSD = convertToUSD(project.budget.maximum, project.budget.currency);
 
@@ -256,6 +600,7 @@ class ProjectStore {
       };
     }
 
+    // Rule 6: Client Trust & Verification
     if (config.requirePaymentVerified && !project.client.paymentVerified && project.feedSource !== 'rss') {
       return {
         qualified: false,
@@ -267,6 +612,13 @@ class ProjectStore {
       return {
         qualified: false,
         reason: `Client rating below threshold (${project.client.rating.toFixed(1)} < ${config.minClientRating})`,
+      };
+    }
+
+    if (project.feedSource !== 'rss' && config.minClientReviews > 0 && (project.client.reviewsCount || 0) < config.minClientReviews) {
+      return {
+        qualified: false,
+        reason: `Client reviews below threshold (${project.client.reviewsCount} < ${config.minClientReviews})`,
       };
     }
 
@@ -334,13 +686,10 @@ class ProjectStore {
     project.status = 'BID_PLACED';
     project.matchedTags = evaluation.matchedTags;
 
-    // Default bid calculation (used if AI pricing is off or as initial baseline)
-    const bidAmount = Math.max(
-      project.budget.minimum,
-      Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100))
-    );
-    project.bidAmount = bidAmount;
-    project.bidPeriodDays = config.defaultDeliveryDays;
+    // Resolve unified bid amount and delivery duration
+    const resolved = this.resolveBidAmount(project);
+    project.bidAmount = resolved.amount;
+    project.bidPeriodDays = resolved.deliveryDays;
 
     const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
 
@@ -368,14 +717,15 @@ class ProjectStore {
         project.modelUsed = aiResult.modelUsed;
         project.pricingReasoning = aiResult.pricingReasoning;
         project.generatedAt = Date.now();
-        if (aiResult.recommendedBidAmount) {
+        if (aiResult.recommendedBidAmount && config.useAiPricingAndDays !== false) {
           project.bidAmount = aiResult.recommendedBidAmount;
         }
-        if (aiResult.recommendedDeliveryDays) {
+        if (aiResult.recommendedDeliveryDays && config.useAiPricingAndDays !== false) {
           project.bidPeriodDays = aiResult.recommendedDeliveryDays;
         }
 
-        if (config.autoBidEnabled) {
+        const bidGate = this.canBidNow();
+        if (config.autoBidEnabled && bidGate.allowed) {
           const isSimulated = config.dryRunMode;
           project.bidPlacedAt = Date.now();
           this.state.stats.totalBidsPlaced += 1;
@@ -394,6 +744,8 @@ class ProjectStore {
           };
 
           this.state.bids.unshift(bidLog);
+        } else if (config.autoBidEnabled && !bidGate.allowed) {
+          console.log(`[AUTOBID GATE] Project #${project.id} proposal generated, but bidding paused: ${bidGate.reason}`);
         }
       } catch (error: any) {
         console.error('Error generating bid for project:', project.id, error);

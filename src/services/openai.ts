@@ -65,7 +65,16 @@ HARD RULES:
 
 function cleanProposalText(text: string): string {
   if (!text) return '';
-  return text.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  let cleaned = text.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  
+  // Enforce rule: Line 1 must strictly be "Hi" (never "Hi freelancer_client," or "Hi John,")
+  const lines = cleaned.split('\n');
+  if (lines.length > 0 && lines[0].trim().toLowerCase().startsWith('hi')) {
+    lines[0] = 'Hi';
+    cleaned = lines.join('\n');
+  }
+
+  return cleaned;
 }
 
 export async function generateProposal(params: GenerateProposalParams): Promise<ProposalGenerationResult> {

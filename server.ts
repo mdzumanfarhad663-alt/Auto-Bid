@@ -43,6 +43,11 @@ app.get('/api/stats', (req, res) => {
   res.json(projectStore.getStats());
 });
 
+// Dashboard aggregated data endpoint
+app.get('/api/dashboard', (req, res) => {
+  res.json(projectStore.getDashboardData());
+});
+
 // Projects feed
 app.get('/api/projects', (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 100;

@@ -42,7 +42,11 @@ export interface FilterConfig {
   desktopNotifications: boolean;
   audioAlerts: boolean;
   mandatorySkills: string[];
+  minMatchingSkills: number; // Minimum number of mandatory skills that must match (default 1)
   negativeKeywords: string[];
+  blockedCountries: string[]; // Block projects from specific client countries (e.g. ['India', 'Pakistan'])
+  allowedLanguages: string[]; // Allowed project languages (e.g. ['English', 'ALL'])
+  blockedCategories: string[]; // Blacklisted project categories/jobs
   minBudget: number;
   maxBudget: number;
   allowedCurrencies: string[];
@@ -60,9 +64,30 @@ export interface FilterConfig {
   bidPercentageOfMaxBudget: number; // e.g. 85% of client max budget
   defaultDeliveryDays: number;
   useAiPricingAndDays: boolean; // Use OpenAI API to analyze scope & choose optimal budget & delivery days
+  bidStrategy: 'low_end' | 'percentage_max' | 'midpoint' | 'custom_formula' | 'fixed';
+  bidAmountFormula?: string;
+  fixedBidAmount?: number;
+  budgetTiersEnabled: boolean;
+  budgetTiers: Array<{
+    id: string;
+    minBudget: number;
+    maxBudget: number;
+    bidPercentage: number;
+    deliveryDays: number;
+  }>;
+  delayBetweenBidsSeconds: number; // Minimum delay between consecutive bids (e.g. 0s)
+  maxBidsPerDay: number; // Maximum successful auto-bids per day (e.g. 40)
+  activeHoursFrom: number; // 0 to 23 (24h format)
+  activeHoursTo: number; // 1 to 24 (24h format)
+  autoPostClarification: boolean; // Auto-post questions to project Clarification Board (never private chat)
+  allowFreeSealedUpgrade: boolean; // Take Sealed upgrade only when price is confirmed $0 / Free
+  allowFreeNdaUpgrade: boolean; // Take NDA upgrade only when price is confirmed $0 / Free
   handsFreeAutoSubmit: boolean; // Automatically click Freelancer.com 'Place Bid' button via extension
   autoSubmitDelaySeconds: number; // Countdown seconds before auto-clicking (e.g. 2s)
   autoOpenQualified: boolean; // Autonomously open and submit qualified projects as they arrive
+  autoCloseTabOnSuccess: boolean; // Automatically close project tab after bid is successfully submitted
+  autoCloseDelaySeconds: number; // Delay before closing successful project tab (e.g. 3s)
+  closeTabOnFailure: boolean; // Automatically close tab if project fails in-page safety or validation
 }
 
 export const DEFAULT_CONFIG: FilterConfig = {
@@ -88,7 +113,11 @@ export const DEFAULT_CONFIG: FilterConfig = {
     'SEO',
     'Data Entry'
   ],
+  minMatchingSkills: 1,
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
+  blockedCountries: [],
+  allowedLanguages: ['English', 'ALL'],
+  blockedCategories: ['Adult Content', 'Academic Writing', 'Illegal Activities'],
   minBudget: 15,
   maxBudget: 5000,
   allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
@@ -127,9 +156,28 @@ HARD RULES:
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
   useAiPricingAndDays: true, // Intelligently use OpenAI API to select bid amount and delivery days within client budget
+  bidStrategy: 'percentage_max',
+  bidAmountFormula: 'No formula set — bids use the low end of the budget.',
+  fixedBidAmount: 50,
+  budgetTiersEnabled: false,
+  budgetTiers: [
+    { id: 'tier-1', minBudget: 0, maxBudget: 100, bidPercentage: 90, deliveryDays: 2 },
+    { id: 'tier-2', minBudget: 100, maxBudget: 500, bidPercentage: 85, deliveryDays: 4 },
+    { id: 'tier-3', minBudget: 500, maxBudget: 5000, bidPercentage: 80, deliveryDays: 7 },
+  ],
+  delayBetweenBidsSeconds: 0, // 0s minimum delay
+  maxBidsPerDay: 40, // 40 max bids / day
+  activeHoursFrom: 0, // 12 AM midnight
+  activeHoursTo: 24, // 12 AM midnight end of day
+  autoPostClarification: false, // Only on clarification board, never private chat
+  allowFreeSealedUpgrade: true, // Auto take Sealed upgrade only if 100% free ($0)
+  allowFreeNdaUpgrade: true, // Auto take NDA upgrade only if 100% free ($0)
   handsFreeAutoSubmit: true, // Auto-clicks 'Place Bid' button on Freelancer without human touch
   autoSubmitDelaySeconds: 2, // 2-second countdown before auto-submit
   autoOpenQualified: true, // Automatically opens matched projects in a new tab for instant bidding
+  autoCloseTabOnSuccess: true, // Closes tab after success
+  autoCloseDelaySeconds: 3, // 3-second delay before tab closes so user can see success
+  closeTabOnFailure: false,
 };
 
 export interface BidLog {
@@ -168,4 +216,69 @@ export interface ExtensionFileExport {
   description: string;
   content: string;
   language: string;
+}
+
+export interface ActivityPoint {
+  label: string;
+  scans: number;
+  bids: number;
+}
+
+export interface DashboardRecentBid {
+  id: string;
+  projectId: number;
+  projectTitle: string;
+  projectUrl: string;
+  projectType: 'Fixed' | 'Hourly';
+  bidAmount: number;
+  currency: string;
+  deliveryDays: number;
+  skills: string[];
+  timestamp: number;
+  status: string;
+  reasonBadge: string;
+}
+
+export interface DashboardRecentScan {
+  id: number;
+  title: string;
+  url: string;
+  projectType: string;
+  budgetFormatted: string;
+  currency: string;
+  skills: string[];
+  timestamp: number;
+  eligibility: 'Ineligible' | 'Eligible' | 'Excluded by you';
+  skipReason: string;
+}
+
+export interface DashboardData {
+  user: {
+    name: string;
+    email: string;
+    trialDaysLeft: number;
+    extensionVersion: string;
+    extensionStatus: 'idle' | 'running' | 'polling';
+  };
+  stats: {
+    bidsToday: number;
+    scansToday: number;
+    bidsThisWeek: number;
+    scansThisWeek: number;
+    bidsThisMonth: number;
+    scansThisMonth: number;
+    bidsAllTime: number;
+    scansAllTime: number;
+  };
+  comparisons: {
+    bidsWeekChange: number;
+    scansWeekChange: number;
+  };
+  activity24h: {
+    points: ActivityPoint[];
+    totalBids24h: number;
+    totalScans24h: number;
+  };
+  recentBids: DashboardRecentBid[];
+  recentScans: DashboardRecentScan[];
 }
