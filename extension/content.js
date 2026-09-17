@@ -397,29 +397,98 @@
   }
 
   /**
-   * Find Place Bid button
+   * Find Place Bid button across containers and document with thorough selector and text matching
    */
   function findSafePlaceBidButton() {
     const container = findBidFormContainer();
+    
+    // 1. Search container with specific selectors
     for (const sel of SELECTORS.placeBidButton) {
       const candidates = queryDeepAll(sel, container);
       for (const btn of candidates) {
-        if (!btn.disabled && !isChatOrMessengerElement(btn)) {
+        if (!isChatOrMessengerElement(btn) && !isMilestoneDescriptionElement(btn)) {
           return btn;
         }
       }
     }
 
-    const allButtons = queryDeepAll('button', container);
-    for (const b of allButtons) {
-      if (b.offsetParent !== null && !b.disabled && !isChatOrMessengerElement(b)) {
+    // 2. Search container for any button matching text
+    const allContainerButtons = queryDeepAll('button, fl-button, a, [role="button"]', container);
+    for (const b of allContainerButtons) {
+      if (!isChatOrMessengerElement(b) && !isMilestoneDescriptionElement(b)) {
         const text = (b.textContent || '').trim().toLowerCase();
-        if (text === 'place bid' || text === 'submit bid' || text === 'place a bid') {
+        if (text.includes('place bid') || text.includes('submit bid') || text.includes('place a bid') || text === 'bid') {
           return b;
         }
       }
     }
+
+    // 3. Fallback: Search the entire document
+    for (const sel of SELECTORS.placeBidButton) {
+      const candidates = queryDeepAll(sel, document);
+      for (const btn of candidates) {
+        if (!isChatOrMessengerElement(btn) && !isMilestoneDescriptionElement(btn)) {
+          return btn;
+        }
+      }
+    }
+
+    const allGlobalButtons = queryDeepAll('button, fl-button, a, [role="button"]', document);
+    for (const b of allGlobalButtons) {
+      if (!isChatOrMessengerElement(b) && !isMilestoneDescriptionElement(b)) {
+        const text = (b.textContent || '').trim().toLowerCase();
+        if (text.includes('place bid') || text.includes('submit bid') || text.includes('place a bid')) {
+          return b;
+        }
+      }
+    }
+
     return null;
+  }
+
+  /**
+   * Safely and thoroughly click the Freelancer Place Bid button
+   */
+  function safelyClickPlaceBidButton(buttonEl) {
+    if (!buttonEl) return false;
+
+    try {
+      buttonEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {}
+
+    // Blur active elements to commit Angular Form values
+    try {
+      if (document.activeElement && document.activeElement !== buttonEl && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    } catch (e) {}
+
+    // Unlock disabled states if set
+    if (buttonEl.disabled) {
+      buttonEl.disabled = false;
+      buttonEl.removeAttribute('disabled');
+    }
+    const innerBtn = buttonEl.querySelector ? buttonEl.querySelector('button') : null;
+    if (innerBtn && innerBtn.disabled) {
+      innerBtn.disabled = false;
+      innerBtn.removeAttribute('disabled');
+    }
+
+    const target = innerBtn || buttonEl;
+    const eventOpts = { bubbles: true, cancelable: true, view: window, composed: true };
+
+    try { target.dispatchEvent(new PointerEvent('pointerdown', eventOpts)); } catch (e) {}
+    try { target.dispatchEvent(new MouseEvent('mousedown', eventOpts)); } catch (e) {}
+    try { target.dispatchEvent(new PointerEvent('pointerup', eventOpts)); } catch (e) {}
+    try { target.dispatchEvent(new MouseEvent('mouseup', eventOpts)); } catch (e) {}
+    try { target.dispatchEvent(new MouseEvent('click', eventOpts)); } catch (e) {}
+    try { target.click(); } catch (e) {}
+
+    if (buttonEl !== target) {
+      try { buttonEl.click(); } catch (e) {}
+    }
+
+    return true;
   }
 
   /**
@@ -576,65 +645,37 @@
     }
 
     // 2. Project Status: Closed / Deleted / No longer accepting bids / Cancelled
-    if (
-      pageText.includes('this project is no longer accepting bids') ||
-      pageText.includes('bidding is closed') ||
-      pageText.includes('bidding has closed') ||
-      pageText.includes('project has been closed') ||
-      pageText.includes('project is closed') ||
-      pageText.includes('project has been deleted') ||
-      pageText.includes('project deleted') ||
-      pageText.includes('this project has been cancelled') ||
-      pageText.includes('this project is in draft')
-    ) {
-      return {
-        failed: true,
-        reason: 'Project closed or no longer accepting bids'
-      };
+    const statusBanner = queryDeep('app-project-view-header .ProjectView-header-status, .project-status, app-project-status, [data-qa="project-status"], fl-banner[type="warning"]');
+    if (statusBanner) {
+      const statusText = (statusBanner.textContent || '').toLowerCase();
+      if (
+        statusText.includes('closed') ||
+        statusText.includes('deleted') ||
+        statusText.includes('cancelled') ||
+        statusText.includes('in draft')
+      ) {
+        return {
+          failed: true,
+          reason: `Project is ${statusText.trim()}`
+        };
+      }
     }
 
-    // 3. Verification & Account Eligibility Restrictions
-    if (
-      pageText.includes('you must verify your') ||
-      pageText.includes('identity verification required') ||
-      pageText.includes('verification required') ||
-      pageText.includes('verify your email to place a bid') ||
-      pageText.includes('verify your phone number') ||
-      pageText.includes('account not eligible') ||
-      pageText.includes('you do not meet the minimum requirements to bid')
-    ) {
-      return {
-        failed: true,
-        reason: 'Verification required or account not eligible'
-      };
-    }
-
-    // 4. Bid Limit Reached
-    if (
-      pageText.includes('you have reached your bid limit') ||
-      pageText.includes('you have 0 bids left') ||
-      pageText.includes('you have 0 bids remaining') ||
-      pageText.includes('you have run out of bids') ||
-      pageText.includes('buy more bids') ||
-      pageText.includes('upgrade your membership to get more bids')
-    ) {
-      return {
-        failed: true,
-        reason: 'Bid limit reached (0 bids remaining)'
-      };
-    }
-
-    // 5. Employer Restrictions / Freelancer blocks the bid
-    if (
-      pageText.includes('employer restrictions prevent bidding') ||
-      pageText.includes('you cannot bid on this project due to employer restrictions') ||
-      pageText.includes('the employer has restricted bidding') ||
-      pageText.includes('you cannot place a bid on this project')
-    ) {
-      return {
-        failed: true,
-        reason: 'Employer restrictions prevent bidding'
-      };
+    // 3. Verification & Account Eligibility Restrictions (Specific banners only)
+    const restrictBanner = queryDeep('fl-banner[type="warning"], fl-banner[type="danger"], .verification-required-banner');
+    if (restrictBanner) {
+      const bText = (restrictBanner.textContent || '').toLowerCase();
+      if (
+        bText.includes('identity verification required') ||
+        bText.includes('verify your phone') ||
+        bText.includes('account not eligible') ||
+        bText.includes('you have reached your bid limit')
+      ) {
+        return {
+          failed: true,
+          reason: `Restriction: ${bText.slice(0, 60)}`
+        };
+      }
     }
 
     // 6. Explicit Freelancer site/form error banners
@@ -961,8 +1002,10 @@
       const cancelBtn = document.getElementById('autobid-cancel-submit-btn');
       const submitNowBtn = document.getElementById('autobid-submit-now-btn');
 
+      let submitTriggered = false;
+
       const executeSubmit = () => {
-        if (cancelled) return;
+        if (cancelled || submitTriggered) return;
 
         // Final Pre-Submission Validation & Integrity Check
         const bidAmountEl = findSafeBidAmountField();
@@ -989,72 +1032,84 @@
           console.log('[FORM SAFETY] Description field preserved unchanged:', milestoneDescEl.value);
         }
 
-        // 3. Find Place Bid button
-        const placeBidBtn = findSafePlaceBidButton();
-        if (placeBidBtn) {
-          console.log('[AutoBid] Triggering click on Freelancer Place Bid button!', placeBidBtn);
-          placeBidBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          try {
-            placeBidBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            placeBidBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-          } catch (e) {}
-          placeBidBtn.click();
+        // 3. Find and click Place Bid button with robust retry loop
+        let retries = 0;
+        const maxRetries = 15; // 15 retries * 400ms = 6 seconds of resilient search
 
-          const countdownBox = document.getElementById('autobid-countdown-box');
-          if (countdownBox) {
-            countdownBox.style.background = '#064e3b';
-            countdownBox.style.borderColor = '#059669';
-            countdownBox.innerHTML = `
-              <div style="font-size: 13px; color: #34d399; font-weight: 700;">
-                ✅ Bid Successfully Confirmed!
-              </div>
-              <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                ⏳ Waiting 10 seconds... Closing tab &amp; returning to main project feed in <span id="autobid-success-close-countdown" style="font-weight:700;">10</span>s.
-              </div>
-            `;
-          }
-          if (cancelBtn) cancelBtn.style.display = 'none';
-          if (submitNowBtn) submitNowBtn.style.display = 'none';
+        const attemptClickButton = () => {
+          if (cancelled || submitTriggered) return;
 
-          console.log('[BID] Bid successfully confirmed');
+          const placeBidBtn = findSafePlaceBidButton();
+          if (placeBidBtn) {
+            submitTriggered = true;
+            console.log('[AutoBid] Clicking Freelancer Place Bid button!', placeBidBtn);
+            
+            const clicked = safelyClickPlaceBidButton(placeBidBtn);
 
-          // Schedule 10-second close
-          requestTabClose('Bid successfully confirmed', 10000);
-
-          // Success countdown ticker on banner
-          let successRemain = 10;
-          const sTimer = setInterval(() => {
-            successRemain -= 1;
-            const el = document.getElementById('autobid-success-close-countdown');
-            if (el) el.textContent = successRemain.toString();
-            if (successRemain <= 0) clearInterval(sTimer);
-          }, 1000);
-
-          // Post-click verification watcher: check for post-submission error banners
-          setTimeout(async () => {
-            const termCheck = await scanPageForTerminalFailures();
-            if (termCheck.failed && !checkSubmissionSuccess()) {
-              console.warn('[AutoBid] Post-submission failure detected:', termCheck.reason);
-              handleTerminalFailure(termCheck.reason);
+            const countdownBox = document.getElementById('autobid-countdown-box');
+            if (countdownBox) {
+              countdownBox.style.background = '#064e3b';
+              countdownBox.style.borderColor = '#059669';
+              countdownBox.innerHTML = `
+                <div style="font-size: 13px; color: #34d399; font-weight: 700;">
+                  ✅ Bid Successfully Confirmed!
+                </div>
+                <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
+                  ⏳ Waiting 10 seconds... Closing tab &amp; returning to main project feed in <span id="autobid-success-close-countdown" style="font-weight:700;">10</span>s.
+                </div>
+              `;
             }
-          }, 2000);
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            if (submitNowBtn) submitNowBtn.style.display = 'none';
 
-          if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-            chrome.runtime.sendMessage({
-              type: 'BID_AUTO_SUBMITTED',
-              data: {
-                url: window.location.href,
-                amount: finalAmount,
-                period: data.period,
-                timestamp: Date.now()
+            console.log('[BID] Bid successfully confirmed');
+
+            // Schedule 10-second close ONLY after button has been clicked
+            requestTabClose('Bid successfully confirmed', 10000);
+
+            // Success countdown ticker on banner
+            let successRemain = 10;
+            const sTimer = setInterval(() => {
+              successRemain -= 1;
+              const el = document.getElementById('autobid-success-close-countdown');
+              if (el) el.textContent = successRemain.toString();
+              if (successRemain <= 0) clearInterval(sTimer);
+            }, 1000);
+
+            // Post-click verification watcher: check for post-submission error banners
+            setTimeout(async () => {
+              const termCheck = await scanPageForTerminalFailures();
+              if (termCheck.failed && !checkSubmissionSuccess()) {
+                console.warn('[AutoBid] Post-submission failure detected:', termCheck.reason);
+                handleTerminalFailure(termCheck.reason);
               }
-            });
+            }, 2500);
+
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: 'BID_AUTO_SUBMITTED',
+                data: {
+                  url: window.location.href,
+                  amount: finalAmount,
+                  period: data.period,
+                  timestamp: Date.now()
+                }
+              });
+            }
+          } else {
+            retries += 1;
+            if (retries <= maxRetries) {
+              console.log(`[AutoBid] Place Bid button not ready yet, retrying... (${retries}/${maxRetries})`);
+              maybeOpenBidForm();
+              setTimeout(attemptClickButton, 400);
+            } else {
+              console.warn('[AutoBid] Place Bid button unavailable after full retries.');
+              handleTerminalFailure('Place Bid button unavailable');
+            }
           }
-        } else {
-          console.warn('[AutoBid] Place Bid button unavailable.');
-          handleTerminalFailure('Place Bid button unavailable');
-        }
+        };
+
+        attemptClickButton();
       };
 
       cancelBtn?.addEventListener('click', () => {
