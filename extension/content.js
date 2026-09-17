@@ -536,9 +536,10 @@
   }
 
   /**
-   * Stage 2: In-Page Full Validation Check
+   * Comprehensive In-Page Terminal Failure and Qualification Scanner
+   * Checks for all terminal conditions where bidding is prohibited, unavailable, or failed.
    */
-  async function validatePageBeforeBidding() {
+  async function scanPageForTerminalFailures() {
     let config = null;
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -547,56 +548,263 @@
       }
     } catch (e) {}
 
-    if (!config) return { valid: true };
-
     const pageText = document.body ? document.body.innerText.toLowerCase() : '';
     const titleEl = document.querySelector('h1, .project-header, app-project-view h1');
     const title = titleEl ? titleEl.textContent.trim().toLowerCase() : '';
 
-    // Check negative keywords
-    if (config.negativeKeywords && config.negativeKeywords.length > 0) {
-      for (const neg of config.negativeKeywords) {
-        const nLower = neg.trim().toLowerCase();
-        if (nLower && (title.includes(nLower) || pageText.includes(nLower))) {
+    // 1. Existing Bid already placed
+    const alreadyBidSelectors = ['.ProjectView-bid-success', 'app-project-view-bid-details', 'app-my-bid', '.my-bid'];
+    for (const sel of alreadyBidSelectors) {
+      const el = queryDeep(sel);
+      if (el && el.offsetParent !== null) {
+        return {
+          failed: true,
+          reason: 'Bid already exists on this project'
+        };
+      }
+    }
+    if (
+      pageText.includes('you have already placed a bid') ||
+      pageText.includes('your bid on this project') ||
+      pageText.includes('retract bid') ||
+      pageText.includes('edit bid')
+    ) {
+      return {
+        failed: true,
+        reason: 'Bid already exists on this project'
+      };
+    }
+
+    // 2. Project Status: Closed / Deleted / No longer accepting bids / Cancelled
+    if (
+      pageText.includes('this project is no longer accepting bids') ||
+      pageText.includes('bidding is closed') ||
+      pageText.includes('bidding has closed') ||
+      pageText.includes('project has been closed') ||
+      pageText.includes('project is closed') ||
+      pageText.includes('project has been deleted') ||
+      pageText.includes('project deleted') ||
+      pageText.includes('this project has been cancelled') ||
+      pageText.includes('this project is in draft')
+    ) {
+      return {
+        failed: true,
+        reason: 'Project closed or no longer accepting bids'
+      };
+    }
+
+    // 3. Verification & Account Eligibility Restrictions
+    if (
+      pageText.includes('you must verify your') ||
+      pageText.includes('identity verification required') ||
+      pageText.includes('verification required') ||
+      pageText.includes('verify your email to place a bid') ||
+      pageText.includes('verify your phone number') ||
+      pageText.includes('account not eligible') ||
+      pageText.includes('you do not meet the minimum requirements to bid')
+    ) {
+      return {
+        failed: true,
+        reason: 'Verification required or account not eligible'
+      };
+    }
+
+    // 4. Bid Limit Reached
+    if (
+      pageText.includes('you have reached your bid limit') ||
+      pageText.includes('you have 0 bids left') ||
+      pageText.includes('you have 0 bids remaining') ||
+      pageText.includes('you have run out of bids') ||
+      pageText.includes('buy more bids') ||
+      pageText.includes('upgrade your membership to get more bids')
+    ) {
+      return {
+        failed: true,
+        reason: 'Bid limit reached (0 bids remaining)'
+      };
+    }
+
+    // 5. Employer Restrictions / Freelancer blocks the bid
+    if (
+      pageText.includes('employer restrictions prevent bidding') ||
+      pageText.includes('you cannot bid on this project due to employer restrictions') ||
+      pageText.includes('the employer has restricted bidding') ||
+      pageText.includes('you cannot place a bid on this project')
+    ) {
+      return {
+        failed: true,
+        reason: 'Employer restrictions prevent bidding'
+      };
+    }
+
+    // 6. Explicit Freelancer site/form error banners
+    const errorBanners = queryDeepAll('fl-banner[type="danger"], fl-banner[type="error"], .banner-danger, .error-message, [data-qa="error-message"]');
+    for (const b of errorBanners) {
+      if (b && b.offsetParent !== null) {
+        const text = (b.textContent || '').trim();
+        if (text && !text.toLowerCase().includes('success')) {
           return {
-            valid: false,
-            reason: `Blacklisted keyword detected on page (${neg})`,
+            failed: true,
+            reason: `Freelancer error: ${text.slice(0, 80)}`
           };
         }
       }
     }
 
-    // Check blocked countries if present in client info
-    if (config.blockedCountries && config.blockedCountries.length > 0) {
-      const clientLocationEl = document.querySelector('.client-location, [data-qa="client-location"], app-client-info');
+    // 7. Negative Keywords check
+    if (config && config.negativeKeywords && config.negativeKeywords.length > 0) {
+      for (const neg of config.negativeKeywords) {
+        const nLower = neg.trim().toLowerCase();
+        if (nLower && (title.includes(nLower) || pageText.includes(nLower))) {
+          return {
+            failed: true,
+            reason: `Disqualified by negative keyword: "${neg}"`
+          };
+        }
+      }
+    }
+
+    // 8. Blocked Client Country check
+    if (config && config.blockedCountries && config.blockedCountries.length > 0) {
+      const clientLocationEl = document.querySelector('.client-location, [data-qa="client-location"], app-client-info, .ProjectView-client-info');
       if (clientLocationEl) {
         const locText = clientLocationEl.textContent.toLowerCase();
         for (const country of config.blockedCountries) {
           const cLower = country.trim().toLowerCase();
           if (cLower && locText.includes(cLower)) {
             return {
-              valid: false,
-              reason: `Client country blocked (${country})`,
+              failed: true,
+              reason: `Disqualified: Blocked client country (${country})`
             };
           }
         }
       }
     }
 
-    // Check if project is closed or no longer accepting bids
-    if (
-      pageText.includes('this project is no longer accepting bids') ||
-      pageText.includes('bidding is closed') ||
-      pageText.includes('project has been closed') ||
-      pageText.includes('project has been deleted')
-    ) {
-      return {
-        valid: false,
-        reason: 'Project is closed and no longer accepting bids',
-      };
-    }
+    return { failed: false };
+  }
 
-    return { valid: true };
+  /**
+   * Show 10-Second Terminal Failure Notification Banner
+   */
+  function showTerminalFailureBanner(reason) {
+    const existing = document.getElementById('freelancer-autobid-floating-banner');
+    if (existing) existing.remove();
+
+    let remaining = 10;
+    let cancelled = false;
+
+    const banner = document.createElement('div');
+    banner.id = 'freelancer-autobid-floating-banner';
+    banner.style.cssText = `
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 99999999;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #ef4444;
+      border-radius: 14px;
+      padding: 16px 20px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      max-width: 400px;
+      animation: autobidSlideIn 0.3s ease-out;
+    `;
+
+    banner.innerHTML = `
+      <style>
+        @keyframes autobidSlideIn {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      </style>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></span>
+          <strong style="color: #f87171; font-size: 14px;">
+            ⚠️ AutoBid Skipped / Failed
+          </strong>
+        </div>
+        <button id="autobid-close-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; line-height: 1;">&times;</button>
+      </div>
+      <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;">
+        <div style="color: #fca5a5; font-weight: 600; margin-bottom: 4px;">• ${reason}</div>
+        <div style="font-size: 12px; color: #94a3b8;">This project cannot be bid on. Logging failure &amp; cleaning up tab...</div>
+      </div>
+      <div style="background: #450a0a; border: 1px solid #7f1d1d; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+        <div style="font-size: 12px; color: #fca5a5; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+          <span>⏳ Closing tab in <span id="autobid-fail-countdown" style="font-size: 14px; font-weight: 700; color: #ffffff;">10</span>s...</span>
+        </div>
+        <div style="font-size: 11px; color: #f87171; margin-top: 4px;">Returning to main project search tab to continue scanning.</div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="autobid-keep-tab-btn" style="flex: 1; background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          Keep Tab Open
+        </button>
+        <button id="autobid-close-now-btn" style="flex: 1; background: #dc2626; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          Close Now ⚡
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(banner);
+
+    document.getElementById('autobid-close-btn')?.addEventListener('click', () => {
+      cancelled = true;
+      banner.remove();
+    });
+
+    document.getElementById('autobid-keep-tab-btn')?.addEventListener('click', () => {
+      cancelled = true;
+      banner.remove();
+      console.log('[AutoBid] Tab close cancelled by user manual override.');
+    });
+
+    document.getElementById('autobid-close-now-btn')?.addEventListener('click', () => {
+      cancelled = true;
+      requestTabClose(reason, 0);
+    });
+
+    const timer = setInterval(() => {
+      if (cancelled) {
+        clearInterval(timer);
+        return;
+      }
+      remaining -= 1;
+      const countdownEl = document.getElementById('autobid-fail-countdown');
+      if (countdownEl) countdownEl.textContent = remaining.toString();
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+  }
+
+  /**
+   * Handle Terminal Failure: Log, display banner, notify background & trigger 10-second close
+   */
+  function handleTerminalFailure(reason) {
+    console.warn(`[AutoBid Terminal Failure] ${reason}`);
+    console.log(`[BID] Failed: ${reason}`);
+
+    // Show 10s countdown banner on screen
+    showTerminalFailureBanner(reason);
+
+    // Schedule 10s tab close in background
+    requestTabClose(reason, 10000);
+
+    // Send failure report to background service worker and local API
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'BID_FAILED',
+          reason: reason,
+          url: window.location.href,
+          timestamp: Date.now()
+        });
+      }
+    } catch (e) {}
   }
 
   /**
@@ -799,18 +1007,38 @@
             countdownBox.style.borderColor = '#059669';
             countdownBox.innerHTML = `
               <div style="font-size: 13px; color: #34d399; font-weight: 700;">
-                ✅ Bid Placed Successfully!
+                ✅ Bid Successfully Confirmed!
               </div>
               <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                Closing tab in 10 seconds...
+                ⏳ Waiting 10 seconds... Closing tab &amp; returning to main project feed in <span id="autobid-success-close-countdown" style="font-weight:700;">10</span>s.
               </div>
             `;
           }
           if (cancelBtn) cancelBtn.style.display = 'none';
           if (submitNowBtn) submitNowBtn.style.display = 'none';
 
-          console.log('[BID] Submission confirmed');
+          console.log('[BID] Bid successfully confirmed');
+
+          // Schedule 10-second close
           requestTabClose('Bid successfully confirmed', 10000);
+
+          // Success countdown ticker on banner
+          let successRemain = 10;
+          const sTimer = setInterval(() => {
+            successRemain -= 1;
+            const el = document.getElementById('autobid-success-close-countdown');
+            if (el) el.textContent = successRemain.toString();
+            if (successRemain <= 0) clearInterval(sTimer);
+          }, 1000);
+
+          // Post-click verification watcher: check for post-submission error banners
+          setTimeout(async () => {
+            const termCheck = await scanPageForTerminalFailures();
+            if (termCheck.failed && !checkSubmissionSuccess()) {
+              console.warn('[AutoBid] Post-submission failure detected:', termCheck.reason);
+              handleTerminalFailure(termCheck.reason);
+            }
+          }, 2000);
 
           if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
             chrome.runtime.sendMessage({
@@ -825,8 +1053,7 @@
           }
         } else {
           console.warn('[AutoBid] Place Bid button unavailable.');
-          console.log('[BID] Failed: Place Bid button unavailable');
-          requestTabClose('Place Bid button unavailable', 10000);
+          handleTerminalFailure('Place Bid button unavailable');
         }
       };
 
@@ -873,12 +1100,11 @@
     if (autofillRunning) return;
     autofillRunning = true;
 
-    // Stage 2 in-page qualification check
-    const validation = await validatePageBeforeBidding();
-    if (!validation.valid) {
-      console.warn('[AutoBid Safety] In-Page validation failed:', validation.reason);
-      console.log(`[BID] Failed: ${validation.reason}`);
-      requestTabClose(validation.reason, 10000);
+    // Comprehensive in-page terminal failure & qualification check
+    const termCheck = await scanPageForTerminalFailures();
+    if (termCheck.failed) {
+      console.warn('[AutoBid Safety] In-Page terminal condition / qualification failed:', termCheck.reason);
+      handleTerminalFailure(termCheck.reason);
       autofillRunning = false;
       return;
     }
@@ -1002,8 +1228,7 @@
           } catch (e) {}
         } else if (isTimedOut) {
           console.warn('[AutoBid] Form elements not found before timeout.');
-          console.log('[BID] Failed: Bid form elements missing or timed out');
-          requestTabClose('Bid form missing or timed out', 10000);
+          handleTerminalFailure('Bid form missing or timed out');
         }
       }
     }, 300);
