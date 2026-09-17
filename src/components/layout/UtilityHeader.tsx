@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import {
   Search,
   Download,
-  Clock,
   Menu,
-  MessageCircle,
   Sparkles,
   RefreshCw,
-  Sliders
+  Power,
+  Play,
+  Square,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { FilterConfig } from '../../types.ts';
 
@@ -19,7 +22,6 @@ interface UtilityHeaderProps {
   isPolling?: boolean;
   onOpenTester?: () => void;
   userName?: string;
-  trialDaysLeft?: number;
   extensionVersion?: string;
 }
 
@@ -31,11 +33,23 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
   isPolling = false,
   onOpenTester,
   userName = 'Md zuman Farhad',
-  trialDaysLeft = 5,
   extensionVersion = 'v1.0.29',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
+
+  const isSystemRunning = config.autoBidEnabled !== false;
+
+  const handleToggleMasterSystem = () => {
+    if (onUpdateConfig) {
+      const nextState = !isSystemRunning;
+      onUpdateConfig({
+        autoBidEnabled: nextState,
+        // When stopped, disable auto-opening & generation as well for absolute safety
+        autoOpenQualified: nextState,
+      });
+    }
+  };
 
   const handleDownloadExtension = async () => {
     setIsDownloading(true);
@@ -51,10 +65,6 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
     } finally {
       setTimeout(() => setIsDownloading(false), 800);
     }
-  };
-
-  const handleWhatsAppHelp = () => {
-    window.open('https://api.whatsapp.com/send?text=Hi!%20I%20need%20assistance%20with%20Freelancer%20AutoBid%20setup.', '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -93,15 +103,60 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
 
       {/* Right Action Items */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* 1-CLICK MASTER SYSTEM ON / OFF SWITCH */}
+        <button
+          id="btn-master-system-toggle"
+          type="button"
+          onClick={handleToggleMasterSystem}
+          title={
+            isSystemRunning
+              ? 'Click to STOP the full system (halts auto-bidding, proposal generation, and scanning)'
+              : 'Click to START the full system (resumes scanning, AI proposals, and auto-bidding)'
+          }
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs border ${
+            isSystemRunning
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 ring-2 ring-emerald-500/20'
+              : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 ring-2 ring-rose-500/20 animate-pulse'
+          }`}
+        >
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              isSystemRunning ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+            }`}
+          />
+          <span className="flex items-center gap-1.5">
+            {isSystemRunning ? (
+              <>
+                <Power className="w-3.5 h-3.5 text-emerald-600" />
+                <span>SYSTEM ACTIVE</span>
+              </>
+            ) : (
+              <>
+                <Square className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                <span>SYSTEM STOPPED</span>
+              </>
+            )}
+          </span>
+          <span
+            className={`text-[10px] font-medium px-1.5 py-0.5 rounded ml-0.5 ${
+              isSystemRunning
+                ? 'bg-emerald-200/60 text-emerald-800'
+                : 'bg-rose-200/70 text-rose-900 font-bold'
+            }`}
+          >
+            {isSystemRunning ? 'Running' : 'Click to Enable'}
+          </span>
+        </button>
+
         {/* Manual Poll Trigger */}
         {onPollNow && (
           <button
             id="btn-header-poll-now"
             type="button"
             onClick={onPollNow}
-            disabled={isPolling}
-            title="Scan Freelancer Feed Now"
-            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors disabled:opacity-60"
+            disabled={isPolling || !isSystemRunning}
+            title={!isSystemRunning ? 'System is stopped' : 'Scan Freelancer Feed Now'}
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isPolling ? 'animate-spin text-blue-600' : ''}`} />
             <span className="hidden md:inline">{isPolling ? 'Scanning...' : 'Scan Now'}</span>
@@ -122,17 +177,6 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
           </button>
         )}
 
-        {/* WhatsApp Button */}
-        <button
-          id="btn-whatsapp-support"
-          type="button"
-          onClick={handleWhatsAppHelp}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs"
-        >
-          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="font-semibold">WhatsApp</span>
-        </button>
-
         {/* Download Extension Button */}
         <button
           id="btn-download-extension"
@@ -144,15 +188,6 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
           <Download className={`w-3.5 h-3.5 text-blue-600 ${isDownloading ? 'animate-bounce' : ''}`} />
           <span className="font-semibold">Download {extensionVersion}</span>
         </button>
-
-        {/* Trial Days Counter */}
-        <div
-          id="trial-days-badge"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg"
-        >
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
-          <span>{trialDaysLeft} days left in trial</span>
-        </div>
 
         {/* User Profile Avatar */}
         <div className="flex items-center gap-2 pl-1 border-l border-slate-200">

@@ -154,10 +154,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={`w-1.5 h-1.5 rounded-full ${
                       extensionStatus === 'running'
                         ? 'bg-emerald-500 animate-pulse'
-                        : 'bg-amber-400'
+                        : 'bg-rose-500'
                     }`}
                   />
-                  Extension {extensionStatus}
+                  Extension {extensionStatus === 'running' ? 'running' : 'stopped'}
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {extensionVersion}
@@ -228,8 +228,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Bot className="w-4 h-4 text-blue-600" />
               <span className="text-[11px] font-medium text-slate-700">Autonomous AI Mode</span>
             </div>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Active
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                extensionStatus === 'running'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}
+            >
+              {extensionStatus === 'running' ? 'Active' : 'Stopped'}
             </span>
           </div>
         </div>

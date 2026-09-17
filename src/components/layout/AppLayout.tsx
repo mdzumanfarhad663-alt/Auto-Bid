@@ -49,7 +49,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             setIsTesterModalOpen(true);
           }}
           userName="Md zuman Farhad"
-          trialDaysLeft={5}
           extensionVersion="v1.0.29"
         />
 
