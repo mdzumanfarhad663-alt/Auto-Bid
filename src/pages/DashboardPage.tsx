@@ -57,7 +57,7 @@ export const DashboardPage: React.FC = () => {
     name: 'Md zuman Farhad',
     email: 'mdzumanfarhad663@gmail.com',
     trialDaysLeft: 5,
-    extensionVersion: 'v1.0.29',
+    extensionVersion: '',
     extensionStatus: 'idle',
   };
 

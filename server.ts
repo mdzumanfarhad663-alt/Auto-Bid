@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import JSZip from 'jszip';
 import { createServer as createViteServer } from 'vite';
-import { projectStore } from './src/services/store.ts';
+import { projectStore, getExtensionVersion } from './src/services/store.ts';
 import { generateProposal } from './src/services/openai.ts';
 import { runPollCycle, startBackgroundPoller, fetchFreelancerActiveProjects } from './src/services/freelancer-poller.ts';
 
@@ -26,6 +26,11 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime(),
     dryRun: projectStore.getConfig().dryRunMode,
   });
+});
+
+// Extension version, read from the manifest that the download ZIP is built from
+app.get('/api/extension-version', (req, res) => {
+  res.json({ version: getExtensionVersion() });
 });
 
 // Config endpoints

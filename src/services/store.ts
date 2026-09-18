@@ -6,6 +6,15 @@ import { normalizeBidAmount } from './pricing.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
+const MANIFEST_FILE = path.join(process.cwd(), 'extension', 'manifest.json');
+
+export function getExtensionVersion(): string {
+  try {
+    return `v${JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf-8')).version}`;
+  } catch {
+    return '';
+  }
+}
 
 export { DEFAULT_CONFIG };
 
@@ -311,7 +320,7 @@ class ProjectStore {
         name: 'Md zuman Farhad',
         email: 'mdzumanfarhad663@gmail.com',
         trialDaysLeft: 5,
-        extensionVersion: 'v1.0.29',
+        extensionVersion: getExtensionVersion(),
         extensionStatus: this.state.config.autoBidEnabled ? 'running' : 'idle',
       },
       stats: {

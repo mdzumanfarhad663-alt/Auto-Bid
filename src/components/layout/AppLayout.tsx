@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar.tsx';
 import { UtilityHeader } from './UtilityHeader.tsx';
@@ -24,6 +24,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isTesterModalOpen, setIsTesterModalOpen] = useState(false);
   const [testProject, setTestProject] = useState<FreelancerProject | null>(null);
+  const [extensionVersion, setExtensionVersion] = useState('');
+
+  useEffect(() => {
+    fetch('/api/extension-version')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.version) setExtensionVersion(data.version);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-500/20 antialiased flex flex-col">
@@ -32,7 +42,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
         extensionStatus={config.autoBidEnabled ? 'running' : 'idle'}
-        extensionVersion="v1.0.29"
+        extensionVersion={extensionVersion}
       />
 
       {/* Main Right Layout Area */}
@@ -49,7 +59,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             setIsTesterModalOpen(true);
           }}
           userName="Md zuman Farhad"
-          extensionVersion="v1.0.29"
+          extensionVersion={extensionVersion}
         />
 
         {/* Promotional Audit Banner */}
@@ -80,7 +90,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               <span>• Chrome Manifest V3 Automation Hub</span>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-slate-400">
-              <span>Extension v1.0.29</span>
+              <span>Extension {extensionVersion}</span>
               <span>•</span>
               <span className="text-emerald-600 font-medium">gpt-4o-mini Proposal Engine</span>
             </div>

@@ -30,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen = false,
   onClose,
   extensionStatus = 'idle',
-  extensionVersion = 'v1.0.29',
+  extensionVersion = '',
 }) => {
   const navGroups = [
     {

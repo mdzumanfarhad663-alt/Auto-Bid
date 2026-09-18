@@ -33,7 +33,7 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
   isPolling = false,
   onOpenTester,
   userName = 'Md zuman Farhad',
-  extensionVersion = 'v1.0.29',
+  extensionVersion = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -186,7 +186,9 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs"
         >
           <Download className={`w-3.5 h-3.5 text-blue-600 ${isDownloading ? 'animate-bounce' : ''}`} />
-          <span className="font-semibold">Download {extensionVersion}</span>
+          <span className="font-semibold">
+            {extensionVersion ? `Download ${extensionVersion}` : 'Download Extension'}
+          </span>
         </button>
 
         {/* User Profile Avatar */}
