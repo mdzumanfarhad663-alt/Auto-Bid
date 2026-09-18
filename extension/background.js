@@ -96,6 +96,45 @@ HARD RULES:
 let activeConfig = { ...DEFAULT_CONFIG };
 let processedIds = new Set();
 let isPolling = false;
+
+// Last-known worker state, reported to the dashboard. Without this the service worker is a
+// black box: its console is only reachable from chrome://extensions.
+let lastPollAt = 0;
+let lastPollSummary = null;
+let lastError = null;
+
+async function reportHeartbeat(extra = {}) {
+  const payload = {
+    version: chrome.runtime.getManifest().version,
+    reportedAt: Date.now(),
+    lastPollAt,
+    lastPollSummary,
+    lastError,
+    queueLength: bidQueue.length,
+    activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title, tabId: activeBid.tabId } : null,
+    config: {
+      autoBidEnabled: activeConfig.autoBidEnabled,
+      autoOpenQualified: activeConfig.autoOpenQualified,
+      handsFreeAutoSubmit: activeConfig.handsFreeAutoSubmit,
+      dryRunMode: activeConfig.dryRunMode,
+      hasOpenAiKey: !!(activeConfig.openaiApiKey && activeConfig.openaiApiKey.trim()),
+      pollIntervalSeconds: activeConfig.pollIntervalSeconds,
+      mandatorySkillCount: (activeConfig.mandatorySkills || []).length,
+    },
+    dashboardUrl: getDashboardUrl(),
+    ...extra,
+  };
+
+  try {
+    await fetch(`${getDashboardUrl()}/api/extension-heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.log('[FreelancerAutoBid] Heartbeat failed (dashboard unreachable):', e.message);
+  }
+}
 const notificationUrls = new Map();
 
 // Tab Ownership & Auto-Close Management
@@ -445,18 +484,25 @@ async function runPollingCycle() {
 
   console.log(`[FreelancerAutoBid] Executing poll cycle from public feed (Interval: ${activeConfig.pollIntervalSeconds}s)...`);
   const newProjectsProcessed = [];
+  const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, topSkipReason: null };
+  const skipReasons = {};
 
   try {
     const projects = await fetchActiveFreelancerProjects();
+    summary.fetched = projects.length;
 
     for (const project of projects) {
       if (processedIds.has(project.id)) {
+        summary.alreadySeen += 1;
         continue;
       }
 
       const evalResult = evaluateQualification(project, activeConfig);
 
       if (!evalResult.qualified) {
+        summary.skipped += 1;
+        const key = (evalResult.reason || 'unknown').split('(')[0].trim();
+        skipReasons[key] = (skipReasons[key] || 0) + 1;
         project.status = 'SKIPPED';
         project.skipReason = evalResult.reason;
         project.matchedBlacklist = evalResult.matchedBlacklist;
@@ -483,6 +529,7 @@ async function runPollingCycle() {
       }
 
       // Project Qualified!
+      summary.qualified += 1;
       project.status = 'QUALIFIED';
       project.matchedTags = evalResult.matchedTags;
 
@@ -535,6 +582,8 @@ async function runPollingCycle() {
         project.generatedProposal = proposal;
       } catch (genError) {
         console.error('[FreelancerAutoBid] Proposal generation failed:', genError.message);
+        summary.proposalErrors += 1;
+        lastError = `Proposal generation failed: ${genError.message}`;
         project.skipReason = `OpenAI Error: ${genError.message}`;
         project.status = 'FAILED';
         await recordProjectResult(project);
@@ -564,6 +613,7 @@ async function runPollingCycle() {
 
           // Autonomous mode: queue the project. The queue opens one tab at a time.
           if (directApplyUrl && (activeConfig.autoOpenQualified !== false)) {
+            summary.queued += 1;
             enqueueProjectForBid({
               projectId: project.id,
               title: project.title,
@@ -603,9 +653,17 @@ async function runPollingCycle() {
     await chrome.storage.local.set({ processedIds: idArray });
   } catch (error) {
     console.error('[FreelancerAutoBid] Polling cycle failed:', error);
+    lastError = `Poll cycle failed: ${error.message}`;
   } finally {
     isPolling = false;
   }
+
+  const sortedSkips = Object.entries(skipReasons).sort((a, b) => b[1] - a[1]);
+  summary.topSkipReason = sortedSkips.length ? `${sortedSkips[0][0]} (${sortedSkips[0][1]})` : null;
+  lastPollAt = Date.now();
+  lastPollSummary = summary;
+  console.log('[FreelancerAutoBid] Poll summary:', JSON.stringify(summary));
+  reportHeartbeat();
 
   return newProjectsProcessed;
 }

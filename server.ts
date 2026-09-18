@@ -28,6 +28,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// The extension service worker reports its state here. Its own console is only reachable
+// from chrome://extensions, so without this there is no way to see why it is idle.
+let lastExtensionHeartbeat: any = null;
+
+app.post('/api/extension-heartbeat', (req, res) => {
+  lastExtensionHeartbeat = { ...req.body, receivedAt: Date.now() };
+  res.json({ success: true });
+});
+
+app.get('/api/extension-status', (req, res) => {
+  if (!lastExtensionHeartbeat) {
+    return res.json({ connected: false, message: 'No heartbeat received from the extension yet.' });
+  }
+  const ageSeconds = Math.round((Date.now() - lastExtensionHeartbeat.receivedAt) / 1000);
+  res.json({ connected: ageSeconds < 300, ageSeconds, ...lastExtensionHeartbeat });
+});
+
 // Extension version, read from the manifest that the download ZIP is built from
 app.get('/api/extension-version', (req, res) => {
   res.json({ version: getExtensionVersion() });
