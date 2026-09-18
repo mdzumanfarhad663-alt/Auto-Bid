@@ -215,6 +215,34 @@
     return results;
   }
 
+  function isElementVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    try {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    } catch (e) {}
+    return true;
+  }
+
+  // Angular keeps the submit button disabled until the reactive form validates, and a
+  // disabled button silently swallows dispatched clicks, so this must gate every click.
+  function isButtonDisabled(el) {
+    if (!el) return true;
+    if (el.disabled === true) return true;
+    if (el.hasAttribute && (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true')) return true;
+    const inner = el.querySelector ? el.querySelector('button') : null;
+    if (inner && (inner.disabled === true || (inner.hasAttribute && inner.hasAttribute('disabled')))) return true;
+    return false;
+  }
+
+  function normalizedText(el) {
+    if (!el) return '';
+    const raw = el.innerText || el.textContent || '';
+    return raw.replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
   /**
    * Locate the verified Bid Form root container
    */
@@ -299,6 +327,11 @@
       'button[data-qa="place-bid-btn"]',
       'button[data-qa="place-bid-button"]',
       'button[data-qa="bid-submit-btn"]',
+      'button[data-qa*="place-bid" i]',
+      'button[data-uitest*="place-bid" i]',
+      '[fltrackinglabel*="PlaceBid" i] button',
+      '[fltrackinglabel*="PlaceBid" i]',
+      '[fltrackinglabel*="SubmitBid" i] button',
       'app-project-view-bid-form button[type="submit"]',
       'app-bid-form button[type="submit"]',
       'fl-button[text*="Place Bid" i] button',
@@ -308,6 +341,22 @@
       '#place-bid-btn',
     ]
   };
+
+  const PLACE_BID_TEXTS = [
+    'place bid',
+    'place a bid',
+    'submit bid',
+    'place your bid',
+    'update bid',
+    'update my bid',
+    'bid now',
+  ];
+
+  function looksLikePlaceBidText(text) {
+    if (!text) return false;
+    if (text === 'bid') return true;
+    return PLACE_BID_TEXTS.some((t) => text.includes(t));
+  }
 
   /**
    * Find Proposal field specifically
@@ -399,56 +448,107 @@
   /**
    * Find Place Bid button across containers and document with thorough selector and text matching
    */
-  function findSafePlaceBidButton() {
+  function collectPlaceBidCandidates() {
     const container = findBidFormContainer();
-    
-    // 1. Search container with specific selectors
+    const seen = new Set();
+    const candidates = [];
+
+    const consider = (el, score) => {
+      if (!el || seen.has(el)) return;
+      if (isChatOrMessengerElement(el) || isMilestoneDescriptionElement(el)) return;
+      if (!isElementVisible(el)) return;
+      seen.add(el);
+      candidates.push({ el, score });
+    };
+
+    // Explicit selectors inside the bid form score highest.
     for (const sel of SELECTORS.placeBidButton) {
-      const candidates = queryDeepAll(sel, container);
-      for (const btn of candidates) {
-        if (!isChatOrMessengerElement(btn) && !isMilestoneDescriptionElement(btn)) {
-          return btn;
-        }
-      }
+      for (const btn of queryDeepAll(sel, container)) consider(btn, 100);
     }
-
-    // 2. Search container for any button matching text
-    const allContainerButtons = queryDeepAll('button, fl-button, a, [role="button"]', container);
-    for (const b of allContainerButtons) {
-      if (!isChatOrMessengerElement(b) && !isMilestoneDescriptionElement(b)) {
-        const text = (b.textContent || '').trim().toLowerCase();
-        if (text.includes('place bid') || text.includes('submit bid') || text.includes('place a bid') || text === 'bid') {
-          return b;
-        }
-      }
-    }
-
-    // 3. Fallback: Search the entire document
     for (const sel of SELECTORS.placeBidButton) {
-      const candidates = queryDeepAll(sel, document);
-      for (const btn of candidates) {
-        if (!isChatOrMessengerElement(btn) && !isMilestoneDescriptionElement(btn)) {
-          return btn;
-        }
-      }
+      for (const btn of queryDeepAll(sel, document)) consider(btn, 70);
     }
 
-    const allGlobalButtons = queryDeepAll('button, fl-button, a, [role="button"]', document);
-    for (const b of allGlobalButtons) {
-      if (!isChatOrMessengerElement(b) && !isMilestoneDescriptionElement(b)) {
-        const text = (b.textContent || '').trim().toLowerCase();
-        if (text.includes('place bid') || text.includes('submit bid') || text.includes('place a bid')) {
-          return b;
-        }
+    // Text matching. An <a> is almost always the "jump to bid form" link, not the submitter,
+    // so it ranks below real buttons and is only used as a last resort.
+    const byText = (root, base) => {
+      for (const b of queryDeepAll('button, fl-button, [role="button"], a', root)) {
+        if (!looksLikePlaceBidText(normalizedText(b))) continue;
+        const tag = (b.tagName || '').toLowerCase();
+        let score = base;
+        if (tag === 'a') score -= 40;
+        if (b.getAttribute && b.getAttribute('type') === 'submit') score += 15;
+        consider(b, score);
       }
-    }
+    };
+    byText(container, 60);
+    byText(document, 30);
 
-    return null;
+    candidates.sort((a, b) => {
+      const enabledDelta = (isButtonDisabled(a.el) ? 0 : 1) - (isButtonDisabled(b.el) ? 0 : 1);
+      if (enabledDelta !== 0) return -enabledDelta;
+      return b.score - a.score;
+    });
+
+    return candidates.map((c) => c.el);
+  }
+
+  /**
+   * Returns the best Place Bid button. With requireEnabled the caller gets null while the
+   * Angular form is still invalid, so it can keep waiting instead of clicking a dead button.
+   */
+  function findSafePlaceBidButton(requireEnabled = false) {
+    const candidates = collectPlaceBidCandidates();
+    if (requireEnabled) {
+      return candidates.find((el) => !isButtonDisabled(el)) || null;
+    }
+    return candidates[0] || null;
   }
 
   /**
    * Safely and thoroughly click the Freelancer Place Bid button
    */
+  /**
+   * Re-dispatch input/blur on the filled fields so Angular re-runs validation and releases
+   * the disabled state on the submit button.
+   */
+  function nudgeFormValidation() {
+    const fields = [
+      findSafeProposalField(),
+      findSafeBidAmountField(),
+      findSafeAmountField(),
+      findSafeDeliveryDaysField(),
+    ];
+    for (const el of fields) {
+      if (!el) continue;
+      try {
+        el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+      } catch (e) {}
+    }
+  }
+
+  /**
+   * Last resort when no button can be clicked: submit the bid form itself.
+   */
+  function submitBidFormDirectly() {
+    const container = findBidFormContainer();
+    const form = (container && container.tagName === 'FORM') ? container : queryDeep('form[name="bidForm"], app-project-view-bid-form form, app-bid-form form', container);
+    if (!form) return false;
+    try {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+      console.log('[AutoBid] Submitted bid form directly as button fallback.');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function safelyClickPlaceBidButton(buttonEl) {
     if (!buttonEl) return false;
 
@@ -554,7 +654,12 @@
       const proposal = params.get('autobid_p') || params.get('autobid_proposal') || params.get('proposal');
       const amount = params.get('amount') || params.get('bid_amount');
       const period = params.get('period') || params.get('delivery_days');
-      const autoSubmit = params.get('auto_submit') === '1' || params.get('autobid') === '1' || params.get('submit') === '1';
+      // auto_submit is always emitted alongside autobid=1, so when it is present it decides.
+      // Otherwise autobid=1 alone would auto-submit even with hands-free turned off.
+      const explicitAutoSubmit = params.get('auto_submit');
+      const autoSubmit = explicitAutoSubmit !== null
+        ? explicitAutoSubmit === '1'
+        : (params.get('autobid') === '1' || params.get('submit') === '1');
 
       if (proposal || amount || period) {
         let safeProposal = proposal;
@@ -801,16 +906,23 @@
     const existing = document.getElementById('freelancer-autobid-floating-banner');
     if (existing) existing.remove();
 
-    let isAutoSubmit = data.autoSubmit !== false;
+    // The per-bid payload is authoritative. Stored settings are only a fallback, otherwise a
+    // stale handsFreeAutoSubmit:false silently cancels a bid that was staged with auto_submit=1.
+    let isAutoSubmit = data.autoSubmit !== undefined ? data.autoSubmit !== false : true;
     let delaySeconds = 2;
 
     try {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         const st = await chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'config']);
-        if (st.handsFreeAutoSubmit !== undefined) isAutoSubmit = st.handsFreeAutoSubmit;
-        if (st.autoSubmitDelaySeconds !== undefined) delaySeconds = Math.max(0, parseInt(st.autoSubmitDelaySeconds, 10));
+        if (data.autoSubmit === undefined && st.handsFreeAutoSubmit !== undefined) {
+          isAutoSubmit = st.handsFreeAutoSubmit !== false;
+        }
+        const storedDelay = parseInt(st.autoSubmitDelaySeconds, 10);
+        if (!isNaN(storedDelay)) delaySeconds = Math.max(0, storedDelay);
       }
     } catch (e) {}
+
+    if (isNaN(delaySeconds)) delaySeconds = 2;
 
     const banner = document.createElement('div');
     banner.id = 'freelancer-autobid-floating-banner';
@@ -928,68 +1040,104 @@
           console.log('[FORM SAFETY] Description field preserved unchanged:', milestoneDescEl.value);
         }
 
-        // 3. Find and click Place Bid button with robust retry loop
-        let retries = 0;
-        const maxRetries = 15; // 15 retries * 400ms = 6 seconds of resilient search
+        // 3. Find and click Place Bid button, retrying until the submission is confirmed.
+        // A click can be swallowed (button still disabled, wrong node, Angular re-render), so
+        // the attempt is only treated as final once the page actually reports the bid.
+        let attempts = 0;
+        const maxAttempts = 75; // 75 * 400ms = 30 seconds
+        const maxClicks = 3;
+        let clickCount = 0;
+
+        const markSubmitted = () => {
+          submitTriggered = true;
+
+          const countdownBox = document.getElementById('autobid-countdown-box');
+          if (countdownBox) {
+            countdownBox.style.background = '#064e3b';
+            countdownBox.style.borderColor = '#059669';
+            countdownBox.innerHTML = `
+              <div style="font-size: 13px; color: #34d399; font-weight: 700;">
+                ✅ Bid Successfully Confirmed!
+              </div>
+              <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
+                🎉 Your proposal and pricing have been submitted. Tab kept open for your review.
+              </div>
+            `;
+          }
+          if (cancelBtn) cancelBtn.style.display = 'none';
+          if (submitNowBtn) submitNowBtn.style.display = 'none';
+
+          console.log('[BID] Bid successfully confirmed. Tab will remain open permanently.');
+
+          if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+              type: 'BID_AUTO_SUBMITTED',
+              data: {
+                url: window.location.href,
+                amount: finalAmount,
+                period: data.period,
+                timestamp: Date.now()
+              }
+            });
+          }
+        };
 
         const attemptClickButton = () => {
           if (cancelled || submitTriggered) return;
 
-          const placeBidBtn = findSafePlaceBidButton();
-          if (placeBidBtn) {
-            submitTriggered = true;
-            console.log('[AutoBid] Clicking Freelancer Place Bid button!', placeBidBtn);
-            
-            const clicked = safelyClickPlaceBidButton(placeBidBtn);
+          if (checkSubmissionSuccess()) {
+            markSubmitted();
+            return;
+          }
 
-            const countdownBox = document.getElementById('autobid-countdown-box');
-            if (countdownBox) {
-              countdownBox.style.background = '#064e3b';
-              countdownBox.style.borderColor = '#059669';
-              countdownBox.innerHTML = `
-                <div style="font-size: 13px; color: #34d399; font-weight: 700;">
-                  ✅ Bid Successfully Confirmed!
-                </div>
-                <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                  🎉 Your proposal and pricing have been submitted. Tab kept open for your review.
-                </div>
-              `;
-            }
-            if (cancelBtn) cancelBtn.style.display = 'none';
-            if (submitNowBtn) submitNowBtn.style.display = 'none';
+          attempts += 1;
 
-            console.log('[BID] Bid successfully confirmed. Tab will remain open permanently.');
+          const enabledBtn = clickCount < maxClicks ? findSafePlaceBidButton(true) : null;
 
-            // Post-click verification watcher: check for post-submission error banners
-            setTimeout(async () => {
-              const termCheck = await scanPageForTerminalFailures();
-              if (termCheck.failed && !checkSubmissionSuccess()) {
-                console.warn('[AutoBid] Post-submission notice:', termCheck.reason);
-              }
-            }, 2500);
+          if (enabledBtn) {
+            clickCount += 1;
+            console.log(`[AutoBid] Clicking Freelancer Place Bid button (click ${clickCount}/${maxClicks})`, enabledBtn);
+            safelyClickPlaceBidButton(enabledBtn);
+            // Give Freelancer time to process before deciding the click failed, so a slow
+            // response can never turn into a duplicate bid.
+            setTimeout(attemptClickButton, 3000);
+            return;
+          }
 
-            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-              chrome.runtime.sendMessage({
-                type: 'BID_AUTO_SUBMITTED',
-                data: {
-                  url: window.location.href,
-                  amount: finalAmount,
-                  period: data.period,
-                  timestamp: Date.now()
-                }
-              });
-            }
+          if (clickCount >= maxClicks) {
+            console.log(`[AutoBid] Waiting for Freelancer to confirm the submitted bid... (${attempts}/${maxAttempts})`);
           } else {
-            retries += 1;
-            if (retries <= maxRetries) {
-              console.log(`[AutoBid] Place Bid button not ready yet, retrying... (${retries}/${maxRetries})`);
-              maybeOpenBidForm();
-              setTimeout(attemptClickButton, 400);
+            const anyBtn = findSafePlaceBidButton(false);
+            if (anyBtn) {
+              // Button exists but Angular still considers the form invalid.
+              console.log(`[AutoBid] Place Bid button found but disabled, re-validating form... (${attempts}/${maxAttempts})`);
+              nudgeFormValidation();
             } else {
-              console.warn('[AutoBid] Place Bid button unavailable after full retries.');
-              handleTerminalFailure('Place Bid button unavailable');
+              console.log(`[AutoBid] Place Bid button not rendered yet, retrying... (${attempts}/${maxAttempts})`);
+              maybeOpenBidForm();
             }
           }
+
+          if (attempts >= maxAttempts) {
+            if (clickCount === 0 && submitBidFormDirectly()) {
+              setTimeout(() => {
+                if (!cancelled && !submitTriggered) {
+                  if (checkSubmissionSuccess()) markSubmitted();
+                  else handleTerminalFailure('Place Bid button unavailable');
+                }
+              }, 2500);
+              return;
+            }
+            console.warn('[AutoBid] Bid submission could not be confirmed after full retries.');
+            handleTerminalFailure(
+              clickCount > 0
+                ? 'Place Bid was clicked but Freelancer did not confirm the bid'
+                : 'Place Bid button unavailable'
+            );
+            return;
+          }
+
+          setTimeout(attemptClickButton, 400);
         };
 
         attemptClickButton();
