@@ -74,7 +74,7 @@ class ProjectStore {
           return true;
         });
 
-        const loadedConfig = { ...DEFAULT_CONFIG, ...(parsed.config || {}) };
+        let loadedConfig = { ...DEFAULT_CONFIG, ...(parsed.config || {}) };
         if (loadedConfig.autoOpenQualified === undefined) {
           loadedConfig.autoOpenQualified = true;
         }
@@ -92,6 +92,19 @@ class ProjectStore {
           loadedConfig.allowedCurrencies.push('INR', 'SGD', 'NZD', 'PHP');
         }
 
+        // Render / Cloud Environment Variable Overrides
+        if (process.env.OPENAI_API_KEY && !loadedConfig.openaiApiKey) {
+          loadedConfig.openaiApiKey = process.env.OPENAI_API_KEY;
+        }
+        if (process.env.AUTOBID_CONFIG_JSON) {
+          try {
+            const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
+            if (envParsed && typeof envParsed === 'object') {
+              loadedConfig = { ...loadedConfig, ...envParsed };
+            }
+          } catch (e) {}
+        }
+
         return {
           config: loadedConfig,
           processedProjectIds: (parsed.processedProjectIds || []).filter((id: number) => 
@@ -106,8 +119,21 @@ class ProjectStore {
       console.warn('Failed to load store.json, using defaults:', e);
     }
 
+    let defaultCfg = { ...DEFAULT_CONFIG };
+    if (process.env.OPENAI_API_KEY) {
+      defaultCfg.openaiApiKey = process.env.OPENAI_API_KEY;
+    }
+    if (process.env.AUTOBID_CONFIG_JSON) {
+      try {
+        const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
+        if (envParsed && typeof envParsed === 'object') {
+          defaultCfg = { ...defaultCfg, ...envParsed };
+        }
+      } catch (e) {}
+    }
+
     return {
-      config: { ...DEFAULT_CONFIG },
+      config: defaultCfg,
       processedProjectIds: [],
       projects: [],
       bids: [],

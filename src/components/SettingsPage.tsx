@@ -1317,30 +1317,52 @@ Are you currently using any caching plugin or CDN on the site?`}
 
       {/* SECTION 7: Backup, Persistence & Restore */}
       {(activeSubTab === 'all' || activeSubTab === 'backup') && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-4">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <Download className="h-5 w-5 text-sky-400" />
-              Backup, Persistence &amp; Database State
+              Permanent Persistence &amp; Multi-Layer Auto-Restore
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Your configuration is mirrored to browser storage so updates on Render and GitHub never wipe your custom skills, rules, or keys.
+              Your settings are protected by a 3-layer persistence architecture so updates on Render and GitHub never wipe your custom skills, rules, or keys.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Layer 1: Browser Auto-Rehydration (Active)</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Every time you save or modify settings, they are mirrored to your browser's persistent storage. Whenever Render redeploys or restarts from a clean container, the dashboard detects the fresh server and <strong>automatically re-uploads and restores all your custom settings to the server</strong> seamlessly.
+              </p>
+            </div>
+
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-sky-400">
+                <Globe className="h-4 w-4" />
+                <span>Layer 2: Render Environment Variables</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                For complete server-side permanent boot persistence across all team devices, you can also optionally add <code className="text-sky-300 font-mono text-[10px] bg-slate-900 px-1 py-0.5 rounded">OPENAI_API_KEY</code> or <code className="text-sky-300 font-mono text-[10px] bg-slate-900 px-1 py-0.5 rounded">AUTOBID_CONFIG_JSON</code> into your Render Dashboard <strong className="text-slate-300">Environment Variables</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-slate-800">
             <button
               type="button"
               onClick={handleExportBackup}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition shadow-xs"
             >
               <Download className="h-4 w-4 text-sky-400" />
-              <span>Export Backup (.json)</span>
+              <span>Export Settings JSON (Backup)</span>
             </button>
 
-            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer">
+            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer shadow-xs">
               <Upload className="h-4 w-4 text-indigo-400" />
-              <span>Import Backup (.json)</span>
+              <span>Import Settings JSON (Restore)</span>
               <input
                 type="file"
                 accept=".json"

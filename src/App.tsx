@@ -75,8 +75,39 @@ export default function App() {
       ]);
 
       if (configRes.ok) {
-        const currentConfig: FilterConfig = await configRes.json();
-        setConfig(currentConfig);
+        const serverConfig: FilterConfig = await configRes.json();
+        
+        let clientSavedConfig: Partial<FilterConfig> | null = null;
+        try {
+          const cached = localStorage.getItem('freelancer_autobid_config');
+          if (cached) {
+            clientSavedConfig = JSON.parse(cached);
+          }
+        } catch (e) {}
+
+        // Check if client has custom settings (API key, custom skills, prompt, portfolio) that the server lacks
+        const serverMissingCustom =
+          (!serverConfig.openaiApiKey && !!clientSavedConfig?.openaiApiKey) ||
+          (clientSavedConfig?.portfolioLinks && clientSavedConfig.portfolioLinks.length > 0 && (!serverConfig.portfolioLinks || serverConfig.portfolioLinks.length === 0)) ||
+          (clientSavedConfig?.mandatorySkills && clientSavedConfig.mandatorySkills.length > 0 && JSON.stringify(serverConfig.mandatorySkills) !== JSON.stringify(clientSavedConfig.mandatorySkills));
+
+        let finalConfig: FilterConfig;
+        if (clientSavedConfig && serverMissingCustom) {
+          // Re-hydrate the server with client's saved configuration from localStorage
+          finalConfig = { ...DEFAULT_CONFIG, ...serverConfig, ...clientSavedConfig };
+          fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(finalConfig),
+          }).catch((err) => console.warn('[Config Sync] Auto-rehydration notice:', err));
+        } else {
+          finalConfig = { ...DEFAULT_CONFIG, ...(clientSavedConfig || {}), ...serverConfig };
+        }
+
+        setConfig(finalConfig);
+        try {
+          localStorage.setItem('freelancer_autobid_config', JSON.stringify(finalConfig));
+        } catch (err) {}
       }
 
       if (projectsRes.ok) {
@@ -128,6 +159,19 @@ export default function App() {
   useEffect(() => {
     fetchData();
 
+    // Listen for storage changes across tabs to keep all dashboard windows in sync
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'freelancer_autobid_config' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && typeof parsed === 'object') {
+            setConfig((prev) => ({ ...prev, ...parsed }));
+          }
+        } catch (err) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
     const intervalSecs = config.pollIntervalSeconds || 30;
     setPollCountdown(intervalSecs);
 
@@ -141,7 +185,10 @@ export default function App() {
       });
     }, 1000);
 
-    return () => clearInterval(ticker);
+    return () => {
+      clearInterval(ticker);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [fetchData, config.pollIntervalSeconds]);
 
   // Update configuration handler
