@@ -77,6 +77,16 @@
     <div id="keyStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Strict Markdown Rules Active</div>
   </div>
 
+  <!-- Where the dashboard is hosted, so the extension can read its config and key -->
+  <div class="api-card">
+    <label for="dashboardUrlInput">🌐 Dashboard URL</label>
+    <div style="display: flex; gap: 6px;">
+      <input type="text" id="dashboardUrlInput" class="text-input" placeholder="http://localhost:3000" />
+      <button id="saveDashboardBtn" class="btn btn-secondary" style="flex: 0 0 60px; padding: 4px 8px; font-size: 11px;">Save</button>
+    </div>
+    <div id="dashboardStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Set this to your hosted dashboard, e.g. https://your-app.onrender.com</div>
+  </div>
+
   <div class="toggle-row" style="background: #1e1b4b; border-color: #4f46e5;">
     <div>
       <div style="font-weight: 700; color: #a5b4fc; display: flex; align-items: center; gap: 4px;">

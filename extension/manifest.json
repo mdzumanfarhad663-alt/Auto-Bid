@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Freelancer AutoBid - Real-Time AI Bidder",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Real-time background listener, qualification filter, and gpt-4o-mini auto-bidder for Freelancer.com.",
   "permissions": [
     "storage",
@@ -15,7 +15,8 @@
     "https://www.freelancer.com/*",
     "https://api.openai.com/*",
     "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*"
+    "http://127.0.0.1:3000/*",
+    "https://*.onrender.com/*"
   ],
   "content_scripts": [
     {

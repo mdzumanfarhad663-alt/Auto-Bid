@@ -14,6 +14,24 @@
  */
 
 const LOCAL_DASHBOARD_URL = 'http://localhost:3000';
+
+// The dashboard can be hosted anywhere (Render, a VPS, localhost). The extension reads its
+// config and OpenAI key from it, so the URL has to be settable rather than hardcoded.
+let dashboardUrl = LOCAL_DASHBOARD_URL;
+
+function getDashboardUrl() {
+  return (dashboardUrl || LOCAL_DASHBOARD_URL).replace(/\/+$/, '');
+}
+
+async function loadDashboardUrl() {
+  try {
+    const { dashboardUrl: stored } = await chrome.storage.local.get('dashboardUrl');
+    if (stored && typeof stored === 'string' && stored.trim()) {
+      dashboardUrl = stored.trim();
+      console.log('[FreelancerAutoBid] Dashboard URL:', getDashboardUrl());
+    }
+  } catch (e) {}
+}
 const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 
 // Default configuration
@@ -336,6 +354,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'SET_DASHBOARD_URL') {
+    dashboardUrl = (message.url || '').trim() || LOCAL_DASHBOARD_URL;
+    chrome.storage.local.set({ dashboardUrl });
+    console.log('[FreelancerAutoBid] Dashboard URL set to:', getDashboardUrl());
+    sendResponse({ success: true, dashboardUrl: getDashboardUrl() });
+    return true;
+  }
+
   // A bid finished: close its tab after the review delay, then release the queue.
   if (message.type === 'BID_AUTO_SUBMITTED' || message.type === 'BID_COMPLETED') {
     const tabId = sender.tab ? sender.tab.id : message.tabId;
@@ -370,12 +396,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function loadStoredConfig() {
+  await loadDashboardUrl();
   const data = await chrome.storage.local.get(['config', 'processedIds', 'openaiApiKey']);
   if (data.config) {
     activeConfig = { ...DEFAULT_CONFIG, ...data.config };
   } else {
     try {
-      const res = await fetch(`${LOCAL_DASHBOARD_URL}/api/config`);
+      const res = await fetch(`${getDashboardUrl()}/api/config`);
       if (res.ok) {
         const remoteConfig = await res.json();
         activeConfig = { ...DEFAULT_CONFIG, ...remoteConfig };
@@ -852,7 +879,7 @@ async function generateAiProposal(project, config) {
 
   if (!apiKey || apiKey.trim() === '') {
     try {
-      const res = await fetch(`${LOCAL_DASHBOARD_URL}/api/config`);
+      const res = await fetch(`${getDashboardUrl()}/api/config`);
       if (res.ok) {
         const remoteConfig = await res.json();
         if (remoteConfig.openaiApiKey) {
@@ -869,7 +896,7 @@ async function generateAiProposal(project, config) {
       project.id,
       '⚠️ OpenAI API Key Required',
       'Please enter your OpenAI API Key in the extension popup or dashboard to generate proposals according to your markdown rules.',
-      'http://localhost:3000'
+      getDashboardUrl()
     );
     throw new Error('OpenAI API Key is required. Please configure your OpenAI API Key.');
   }
@@ -976,7 +1003,7 @@ async function submitFreelancerBid(project, amount, proposal) {
  */
 async function recordProjectResult(project) {
   try {
-    await fetch(`${LOCAL_DASHBOARD_URL}/api/projects`, {
+    await fetch(`${getDashboardUrl()}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(project),

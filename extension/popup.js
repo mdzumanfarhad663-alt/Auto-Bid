@@ -17,6 +17,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const openaiKeyInput = document.getElementById('openaiKeyInput');
   const saveKeyBtn = document.getElementById('saveKeyBtn');
   const keyStatus = document.getElementById('keyStatus');
+  const dashboardUrlInput = document.getElementById('dashboardUrlInput');
+  const saveDashboardBtn = document.getElementById('saveDashboardBtn');
+  const dashboardStatus = document.getElementById('dashboardStatus');
+
+  chrome.storage.local.get('dashboardUrl', (data) => {
+    if (dashboardUrlInput) {
+      dashboardUrlInput.value = data.dashboardUrl || 'http://localhost:3000';
+    }
+  });
+
+  if (saveDashboardBtn) {
+    saveDashboardBtn.addEventListener('click', () => {
+      const url = (dashboardUrlInput?.value || '').trim().replace(/\/+$/, '');
+      chrome.runtime.sendMessage({ type: 'SET_DASHBOARD_URL', url }, () => {
+        if (dashboardStatus) {
+          dashboardStatus.textContent = `✓ Dashboard set to ${url || 'http://localhost:3000'}`;
+          dashboardStatus.style.color = '#34d399';
+        }
+      });
+    });
+  }
 
   // Load status from background service worker & storage
   chrome.storage.local.get(['handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'autoOpenQualified', 'openaiApiKey', 'config'], (localData) => {
@@ -66,16 +87,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Try to query local dashboard for up-to-date stats and sync key
+  // Query the configured dashboard for up-to-date stats and sync the key
+  const { dashboardUrl: savedUrl } = await chrome.storage.local.get('dashboardUrl');
+  const dashboard = (savedUrl || 'http://localhost:3000').replace(/\/+$/, '');
+
   try {
-    const res = await fetch('http://localhost:3000/api/stats');
+    const res = await fetch(`${dashboard}/api/stats`);
     if (res.ok) {
       const stats = await res.json();
       scannedCount.textContent = stats.totalScanned || 0;
       bidsCount.textContent = stats.totalBidsPlaced || 0;
     }
 
-    const cfgRes = await fetch('http://localhost:3000/api/config');
+    const cfgRes = await fetch(`${dashboard}/api/config`);
     if (cfgRes.ok) {
       const remoteConfig = await cfgRes.json();
       if (remoteConfig.openaiApiKey && (!openaiKeyInput.value || openaiKeyInput.value === '')) {
