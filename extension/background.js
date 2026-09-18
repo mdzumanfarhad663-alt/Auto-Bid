@@ -107,6 +107,8 @@ let lastError = null;
 const proposalFailureCounts = new Map();
 const MAX_PROPOSAL_ATTEMPTS = 3;
 
+let configSource = 'defaults';
+
 async function reportHeartbeat(extra = {}) {
   const payload = {
     version: chrome.runtime.getManifest().version,
@@ -124,8 +126,14 @@ async function reportHeartbeat(extra = {}) {
       dryRunMode: activeConfig.dryRunMode,
       hasOpenAiKey: !!(activeConfig.openaiApiKey && activeConfig.openaiApiKey.trim()),
       pollIntervalSeconds: activeConfig.pollIntervalSeconds,
-      mandatorySkillCount: (activeConfig.mandatorySkills || []).length,
+      mandatorySkills: activeConfig.mandatorySkills || [],
+      requirePaymentVerified: activeConfig.requirePaymentVerified,
+      minClientRating: activeConfig.minClientRating,
+      minBudget: activeConfig.minBudget,
+      maxBudget: activeConfig.maxBudget,
+      allowedCurrencies: activeConfig.allowedCurrencies,
     },
+    configSource,
     dashboardUrl: getDashboardUrl(),
     ...extra,
   };
@@ -450,23 +458,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+/**
+ * Pull the current filter settings from the dashboard.
+ * The dashboard is where the user edits filters, so it wins over the stored copy. Loading
+ * the stored copy whenever one existed meant the extension kept running whatever settings
+ * it first cached and never saw a change made on the dashboard again.
+ */
+async function syncConfigFromDashboard() {
+  try {
+    const res = await fetch(`${getDashboardUrl()}/api/config`);
+    if (!res.ok) return false;
+
+    const remoteConfig = await res.json();
+    if (!remoteConfig || typeof remoteConfig !== 'object') return false;
+
+    const localKey = activeConfig.openaiApiKey;
+    activeConfig = { ...DEFAULT_CONFIG, ...activeConfig, ...remoteConfig };
+
+    // Keep a key held only by the extension when the dashboard has none.
+    if (!activeConfig.openaiApiKey && localKey) activeConfig.openaiApiKey = localKey;
+
+    await chrome.storage.local.set({ config: activeConfig });
+    configSource = 'dashboard';
+    return true;
+  } catch (e) {
+    configSource = 'local (dashboard unreachable)';
+    return false;
+  }
+}
+
 async function loadStoredConfig() {
   await loadDashboardUrl();
   const data = await chrome.storage.local.get(['config', 'processedIds', 'openaiApiKey']);
   if (data.config) {
     activeConfig = { ...DEFAULT_CONFIG, ...data.config };
-  } else {
-    try {
-      const res = await fetch(`${getDashboardUrl()}/api/config`);
-      if (res.ok) {
-        const remoteConfig = await res.json();
-        activeConfig = { ...DEFAULT_CONFIG, ...remoteConfig };
-        await chrome.storage.local.set({ config: activeConfig });
-      }
-    } catch (e) {
-      console.log('[FreelancerAutoBid] Local dashboard not reachable yet, using defaults.');
-    }
+    configSource = 'local';
   }
+
+  // Always ask the dashboard, so edits made there take effect here.
+  await syncConfigFromDashboard();
 
   if (data.openaiApiKey && !activeConfig.openaiApiKey) {
     activeConfig.openaiApiKey = data.openaiApiKey;
@@ -500,8 +530,11 @@ async function runPollingCycle() {
 
   console.log(`[FreelancerAutoBid] Executing poll cycle from public feed (Interval: ${activeConfig.pollIntervalSeconds}s)...`);
   const newProjectsProcessed = [];
-  const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, topSkipReason: null };
-  const skipReasons = {};
+  const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, topSkipReason: null, skipReasons: {} };
+  const skipReasons = summary.skipReasons;
+
+  // Pick up filter changes made on the dashboard before evaluating this batch.
+  await syncConfigFromDashboard();
 
   try {
     const projects = await fetchActiveFreelancerProjects();
