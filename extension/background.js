@@ -161,6 +161,65 @@ let bidQueue = [];
 let activeBid = null; // { tabId, projectId, title, startedAt }
 let bidWatchdogTimer = null;
 
+// Every project ever opened for bidding, with what happened. A project gets exactly one
+// attempt: once it is here it is never queued or opened again, whatever the outcome, and
+// clearing the seen list does not touch it. Persisted, because the worker restarts often.
+let bidOutcomes = {}; // projectId -> { outcome: 'submitted' | 'failed', reason, at }
+
+function hasBeenAttempted(projectId) {
+  return Object.prototype.hasOwnProperty.call(bidOutcomes, String(projectId));
+}
+
+async function persistQueueState() {
+  try {
+    await chrome.storage.local.set({ bidQueue, activeBid, bidOutcomes });
+  } catch (e) {}
+}
+
+async function persistProcessedIds() {
+  try {
+    await chrome.storage.local.set({ processedIds: Array.from(processedIds).slice(-1000) });
+  } catch (e) {}
+}
+
+/**
+ * Rebuild queue state after a service worker restart. The active tab may or may not
+ * still exist; if it is gone the slot is released so the queue can move on.
+ */
+async function restoreQueueState() {
+  try {
+    const data = await chrome.storage.local.get(['bidQueue', 'activeBid', 'bidOutcomes']);
+    if (data.bidOutcomes && typeof data.bidOutcomes === 'object') bidOutcomes = data.bidOutcomes;
+    if (Array.isArray(data.bidQueue)) bidQueue = data.bidQueue.filter((e) => e && e.projectId && !hasBeenAttempted(e.projectId));
+
+    if (data.activeBid && data.activeBid.tabId) {
+      try {
+        await chrome.tabs.get(data.activeBid.tabId);
+        activeBid = data.activeBid;
+        console.log(`[AutoBid Queue] Resumed active bid on "${activeBid.title}" in tab ${activeBid.tabId}`);
+      } catch (e) {
+        console.log('[AutoBid Queue] Active bid tab is gone after restart, releasing the slot.');
+        recordOutcome(data.activeBid.projectId, 'failed', 'tab closed during worker restart');
+        activeBid = null;
+      }
+    }
+  } catch (e) {}
+  await persistQueueState();
+  processBidQueue();
+}
+
+function recordOutcome(projectId, outcome, reason) {
+  if (!projectId) return;
+  bidOutcomes[String(projectId)] = { outcome, reason: reason || '', at: Date.now() };
+  processedIds.add(projectId);
+
+  fetch(`${getDashboardUrl()}/api/projects/${projectId}/outcome`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ outcome, reason }),
+  }).catch(() => {});
+}
+
 const QUEUE_MAX_AGE_MS = 15 * 60 * 1000; // a project this stale has too many bids to be worth one
 const BID_WATCHDOG_MS = 3 * 60 * 1000; // a stuck tab must never freeze the queue forever
 
@@ -201,12 +260,18 @@ function scheduleProjectTabClose(tabId, reason, delayMs) {
 function enqueueProjectForBid(entry) {
   if (!entry || !entry.url) return;
 
+  if (hasBeenAttempted(entry.projectId)) {
+    console.log(`[AutoBid Queue] Not re-queueing "${entry.title}": already attempted (${bidOutcomes[String(entry.projectId)].outcome})`);
+    return;
+  }
+
   const alreadyQueued = bidQueue.some((q) => q.projectId === entry.projectId);
   const isActive = activeBid && activeBid.projectId === entry.projectId;
   if (alreadyQueued || isActive) return;
 
   bidQueue.push({ ...entry, queuedAt: Date.now() });
   console.log(`[AutoBid Queue] Queued "${entry.title}" (queue length: ${bidQueue.length})`);
+  persistQueueState();
   processBidQueue();
 }
 
@@ -225,8 +290,12 @@ function processBidQueue() {
     bidQueue = fresh;
   }
 
-  const next = bidQueue.shift();
-  if (!next) return;
+  let next = bidQueue.shift();
+  while (next && hasBeenAttempted(next.projectId)) next = bidQueue.shift();
+  if (!next) {
+    persistQueueState();
+    return;
+  }
 
   // Claim the slot synchronously. Opening a tab is async, and several projects can be
   // enqueued in the same tick, so waiting for the callback to set activeBid would let
@@ -259,13 +328,14 @@ function processBidQueue() {
       if (activeBid && activeBid.projectId === next.projectId) {
         activeBid.tabId = newTab.id;
       }
+      persistQueueState();
       console.log(`[AutoBid Queue] Bidding on "${next.title}" in tab ${newTab.id} (${bidQueue.length} waiting)`);
 
       if (bidWatchdogTimer) clearTimeout(bidWatchdogTimer);
       bidWatchdogTimer = setTimeout(() => {
         if (activeBid && activeBid.tabId === newTab.id) {
           console.warn('[AutoBid Queue] Bid timed out with no result, releasing the queue.');
-          finishActiveBid('watchdog timeout', activeConfig.closeTabOnFailure !== false);
+          finishActiveBid('watchdog timeout', activeConfig.closeTabOnFailure !== false, 'failed');
         }
       }, BID_WATCHDOG_MS);
     });
@@ -273,13 +343,16 @@ function processBidQueue() {
 }
 
 /**
- * Release the queue after the active bid settles, then start the next one.
+ * Release the queue after the active bid settles, record the outcome, then start the next.
  */
-function finishActiveBid(reason, shouldClose) {
+function finishActiveBid(reason, shouldClose, outcome = 'failed') {
   if (!activeBid) return;
 
-  const { tabId, title } = activeBid;
+  const { tabId, title, projectId } = activeBid;
   activeBid = null;
+  recordOutcome(projectId, outcome, reason);
+  persistQueueState();
+  persistProcessedIds();
 
   if (bidWatchdogTimer) {
     clearTimeout(bidWatchdogTimer);
@@ -300,7 +373,8 @@ function finishActiveBid(reason, shouldClose) {
 
 // Clean up tab tracking if user manually closes tab
 if (chrome.tabs && chrome.tabs.onRemoved) {
-  chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.tabs.onRemoved.addListener(async (tabId) => {
+    await ensureStateLoaded();
     if (scheduledTabCloses.has(tabId)) {
       clearTimeout(scheduledTabCloses.get(tabId));
       scheduledTabCloses.delete(tabId);
@@ -309,27 +383,45 @@ if (chrome.tabs && chrome.tabs.onRemoved) {
 
     // Closing the active tab by hand is a valid way to skip a project.
     if (activeBid && activeBid.tabId === tabId) {
-      finishActiveBid('tab closed', false);
+      finishActiveBid('tab closed by user', false, 'failed');
     }
   });
+}
+
+// State is loaded once per worker lifetime. Every entry point awaits this, because a
+// revived worker starts with empty module variables regardless of which event woke it.
+let stateReady = null;
+function ensureStateLoaded() {
+  if (!stateReady) {
+    stateReady = loadStoredConfig().catch((e) => {
+      console.error('[FreelancerAutoBid] Failed to load state:', e);
+    });
+  }
+  return stateReady;
 }
 
 // Initialize service worker
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[FreelancerAutoBid] Service worker installed.');
-  await loadStoredConfig();
+  await ensureStateLoaded();
   setupPollingAlarm(activeConfig.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[FreelancerAutoBid] Service worker started.');
-  await loadStoredConfig();
+  await ensureStateLoaded();
   setupPollingAlarm(activeConfig.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS);
 });
+
+// Runs on every worker evaluation, including revivals for alarms, messages and tab events.
+ensureStateLoaded();
 
 // Alarm Listener for periodic background execution (30s / 60s)
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'freelancer_poll_alarm') {
+    // Chrome kills an idle worker and revives it for the alarm with empty module state.
+    // Without reloading, processedIds is empty and the whole feed gets re-queued.
+    await ensureStateLoaded();
     if (activeConfig.autoBidEnabled && !isPolling) {
       await runPollingCycle();
     }
@@ -340,8 +432,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 if (chrome.tabs && chrome.tabs.onUpdated) {
   chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url && tab.url.includes('freelancer.com/projects')) {
+      await ensureStateLoaded();
+      // Only the tab the queue opened gets the payload. Any other Freelancer project tab,
+      // such as one opened by hand, would otherwise be filled with a stale proposal.
+      if (!activeBid || activeBid.tabId !== tabId) return;
+
       const stored = await chrome.storage.local.get(['pendingAutoBid', 'handsFreeAutoSubmit', 'autoSubmitDelaySeconds']);
-      if (stored && stored.pendingAutoBid) {
+      if (stored && stored.pendingAutoBid && stored.pendingAutoBid.projectId === activeBid.projectId) {
         const pb = stored.pendingAutoBid;
         if (Date.now() - (pb.timestamp || 0) < 5 * 60 * 1000) {
           console.log('[FreelancerAutoBid] Dispatching AUTOFILL_BID to loaded tab:', tabId);
@@ -380,6 +477,11 @@ if (chrome.notifications && chrome.notifications.onClicked) {
 
 // Message Listener from Popup / Dashboard / Content Script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  ensureStateLoaded().then(() => handleMessage(message, sender, sendResponse));
+  return true; // response is sent asynchronously
+});
+
+function handleMessage(message, sender, sendResponse) {
   if (message.type === 'GET_STATUS') {
     sendResponse({
       activeConfig,
@@ -407,13 +509,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Forget which projects have been seen, so the current feed is evaluated again.
+  // Projects already opened for a bid stay excluded: they get one attempt, ever.
   if (message.type === 'CLEAR_PROCESSED_IDS') {
-    const cleared = processedIds.size;
-    processedIds = new Set();
+    const attempted = new Set(Object.keys(bidOutcomes).map(Number));
+    const cleared = Array.from(processedIds).filter((id) => !attempted.has(id)).length;
+    processedIds = new Set(attempted);
     proposalFailureCounts.clear();
-    chrome.storage.local.set({ processedIds: [] });
-    console.log(`[FreelancerAutoBid] Cleared ${cleared} seen project ids.`);
-    sendResponse({ success: true, cleared });
+    persistProcessedIds();
+    console.log(`[FreelancerAutoBid] Cleared ${cleared} seen project ids (${attempted.size} attempted kept).`);
+    sendResponse({ success: true, cleared, kept: attempted.size });
     return true;
   }
 
@@ -429,7 +533,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'BID_AUTO_SUBMITTED' || message.type === 'BID_COMPLETED') {
     const tabId = sender.tab ? sender.tab.id : message.tabId;
     if (activeBid && activeBid.tabId === tabId) {
-      finishActiveBid('bid submitted', activeConfig.autoCloseTabOnSuccess !== false);
+      finishActiveBid('bid submitted', activeConfig.autoCloseTabOnSuccess !== false, 'submitted');
     } else if (tabId && autoBidOpenedTabs.has(tabId) && activeConfig.autoCloseTabOnSuccess !== false) {
       scheduleProjectTabClose(tabId, 'bid submitted');
     }
@@ -442,7 +546,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = sender.tab ? sender.tab.id : message.tabId;
     const reason = message.reason || 'bid not possible';
     if (activeBid && activeBid.tabId === tabId) {
-      finishActiveBid(reason, activeConfig.closeTabOnFailure !== false);
+      finishActiveBid(reason, activeConfig.closeTabOnFailure !== false, 'failed');
     } else if (tabId && autoBidOpenedTabs.has(tabId) && activeConfig.closeTabOnFailure !== false) {
       scheduleProjectTabClose(tabId, reason);
     }
@@ -456,7 +560,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
-});
+
+  sendResponse({ success: false, error: `Unknown message type: ${message.type}` });
+  return true;
+}
 
 /**
  * Pull the current filter settings from the dashboard.
@@ -509,6 +616,8 @@ async function loadStoredConfig() {
   if (Array.isArray(data.processedIds)) {
     processedIds = new Set(data.processedIds);
   }
+
+  await restoreQueueState();
 }
 
 function setupPollingAlarm(intervalSeconds = 30) {
@@ -541,7 +650,7 @@ async function runPollingCycle() {
     summary.fetched = projects.length;
 
     for (const project of projects) {
-      if (processedIds.has(project.id)) {
+      if (processedIds.has(project.id) || hasBeenAttempted(project.id)) {
         summary.alreadySeen += 1;
         continue;
       }
@@ -707,11 +816,13 @@ async function runPollingCycle() {
 
       await recordProjectResult(project);
       processedIds.add(project.id);
+      // Persist now, not at the end of the cycle: a worker restart mid-cycle must not
+      // forget a project that was just queued and open it a second time.
+      await persistProcessedIds();
       newProjectsProcessed.push(project);
     }
 
-    const idArray = Array.from(processedIds).slice(-1000);
-    await chrome.storage.local.set({ processedIds: idArray });
+    await persistProcessedIds();
   } catch (error) {
     console.error('[FreelancerAutoBid] Polling cycle failed:', error);
     lastError = `Poll cycle failed: ${error.message}`;

@@ -89,6 +89,20 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
+// Extension reports the result of a bid attempt in the project tab
+app.post('/api/projects/:id/outcome', (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
+  const { outcome, reason } = req.body || {};
+  if (isNaN(projectId) || (outcome !== 'submitted' && outcome !== 'failed')) {
+    return res.status(400).json({ error: 'Expected a project id and outcome of "submitted" or "failed"' });
+  }
+  const project = projectStore.recordBidOutcome(projectId, outcome, reason);
+  if (!project) {
+    return res.status(404).json({ error: `Project #${projectId} not found` });
+  }
+  res.json({ success: true, project });
+});
+
 // Generate proposal on-demand for a project (Saves OpenAI tokens!)
 app.post('/api/projects/:id/prepare-bid', async (req, res) => {
   try {

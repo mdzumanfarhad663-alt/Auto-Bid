@@ -209,6 +209,47 @@ class ProjectStore {
     this.persist();
   }
 
+  /**
+   * The extension reports what happened in the tab. processProject never changes the
+   * status of a project it has already stored, so without this a bid that failed on
+   * Freelancer stays listed as ready forever.
+   */
+  public recordBidOutcome(projectId: number, outcome: 'submitted' | 'failed', reason?: string): FreelancerProject | null {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return null;
+
+    if (outcome === 'failed') {
+      project.status = 'FAILED';
+      project.skipReason = reason || 'Bid could not be placed';
+      const log = this.state.bids.find((b) => b.projectId === projectId);
+      if (log) {
+        log.status = 'FAILED';
+        log.errorMessage = project.skipReason;
+      }
+    } else {
+      project.status = 'BID_PLACED';
+      project.bidPlacedAt = Date.now();
+      if (!this.state.bids.some((b) => b.projectId === projectId)) {
+        this.state.bids.unshift({
+          id: `bid-${Date.now()}-${projectId}`,
+          projectId,
+          projectTitle: project.title,
+          clientUsername: project.client?.username || '',
+          bidAmount: project.bidAmount || 0,
+          currency: project.budget?.currency || 'USD',
+          deliveryDays: project.bidPeriodDays || this.state.config.defaultDeliveryDays,
+          proposal: project.generatedProposal || '',
+          timestamp: Date.now(),
+          status: 'SUCCESS',
+        });
+        this.state.stats.totalBidsPlaced += 1;
+      }
+    }
+
+    this.persist();
+    return project;
+  }
+
   public getDashboardData(): DashboardData {
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;

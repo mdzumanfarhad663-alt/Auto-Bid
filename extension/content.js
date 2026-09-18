@@ -790,6 +790,12 @@
   }
 
   // Retrieve pending bid data from URL hash or chrome.storage.local
+  // Numeric project id from the page URL: /projects/<slug>-<id>/details or /projects/<id>
+  function projectIdFromUrl() {
+    const m = window.location.pathname.match(/\/projects\/(?:[^/]*?-)?(\d{6,})(?:\/|$)/);
+    return m ? Number(m[1]) : null;
+  }
+
   async function getPendingBidData() {
     const urlData = parseAutoBidFromUrl();
     if (urlData && (urlData.proposal || urlData.amount)) return urlData;
@@ -799,6 +805,10 @@
         const stored = await chrome.storage.local.get(['pendingAutoBid', 'handsFreeAutoSubmit', 'autoSubmitDelaySeconds', 'config']);
         if (stored && stored.pendingAutoBid) {
           const pb = stored.pendingAutoBid;
+          // The stored payload belongs to one specific project. Applying it to whatever
+          // project page happens to load would fill the wrong proposal.
+          const pageId = projectIdFromUrl();
+          if (pb.projectId && pageId && Number(pb.projectId) !== pageId) return null;
           if (Date.now() - (pb.timestamp || 0) < 5 * 60 * 1000) {
             return {
               ...pb,
@@ -937,6 +947,7 @@
     document.getElementById('autobid-retry-fill-btn')?.addEventListener('click', async () => {
       banner.remove();
       autofillRunning = false;
+      try { sessionStorage.removeItem(FINISHED_FLAG); } catch (e) {}
       const data = await getPendingBidData();
       if (data) attemptAutofill(data);
     });
@@ -947,6 +958,7 @@
    */
   function handleTerminalFailure(reason) {
     console.warn(`[AutoBid Notice] ${reason}`);
+    markTabFinished();
 
     showTerminalFailureBanner(reason);
 
@@ -1157,6 +1169,7 @@
 
         const markSubmitted = () => {
           submitTriggered = true;
+          markTabFinished();
 
           const countdownBox = document.getElementById('autobid-countdown-box');
           if (countdownBox) {
@@ -1484,9 +1497,20 @@
     }, 300);
   }
 
+  // Once a tab has reached a terminal state the attempt is over. Freelancer is an SPA, so
+  // popstate/hashchange fire on in-page navigation and would otherwise restart the autofill.
+  const FINISHED_FLAG = '__freelancer_autobid_finished__';
+  function markTabFinished() {
+    try { sessionStorage.setItem(FINISHED_FLAG, '1'); } catch (e) {}
+  }
+  function isTabFinished() {
+    try { return sessionStorage.getItem(FINISHED_FLAG) === '1'; } catch (e) { return false; }
+  }
+
   // Initialize flow
   async function init() {
     if (!isSafeBidPage()) return;
+    if (isTabFinished()) return;
     const bidData = await getPendingBidData();
     if (bidData) {
       console.log('[AutoBid] Pending bid data found, executing secure autofill...');
