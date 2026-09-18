@@ -173,11 +173,19 @@
       return true;
     }
 
-    // Check if it's a text input in the milestone table row
+    // A text input inside a milestone row is the description, unless its own label
+    // marks it as an amount or day count. Without that check this rule swallows the
+    // bid amount and delivery days fields whenever Freelancer renders them in a row.
     if (el.tagName && el.tagName.toLowerCase() === 'input' && (el.type === 'text' || !el.type)) {
       const parentRow = el.closest('tr, .milestone-row, app-milestone, fl-table-row');
-      if (parentRow && !dataQa.includes('amount') && !name.includes('amount') && !formControl.includes('amount')) {
-        return true;
+      if (parentRow) {
+        const context = fieldContextText(el);
+        const looksLikeValueField =
+          dataQa.includes('amount') ||
+          name.includes('amount') ||
+          formControl.includes('amount') ||
+          /\b(amount|bid|budget|paid to you|days|deliver|period)\b/.test(context);
+        if (!looksLikeValueField) return true;
       }
     }
 
@@ -273,6 +281,8 @@
   const SELECTORS = {
     // 1. Proposal Textarea (The large proposal body)
     proposal: [
+      'textarea#descriptionTextArea',
+      'textarea[placeholder*="best candidate" i]',
       'textarea[data-qa="bid-description"]',
       'textarea[data-qa="bid-description-input"]',
       'textarea[formcontrolname="description"]',
@@ -287,6 +297,8 @@
     ],
     // 2. Delivery Days Input
     period: [
+      'input#periodInput',
+      'input[placeholder*="number of days" i]',
       'input[formcontrolname="period"]',
       'input[data-qa="bid-period"]',
       'input[data-qa="bid-period-input"]',
@@ -298,6 +310,8 @@
     ],
     // 3. Bid Amount Input (Overall Bid Amount)
     bidAmount: [
+      'input#bidAmountInput',
+      'input[placeholder*="enter bid amount" i]',
       'input[formcontrolname="bidAmount"]',
       'input[data-qa="bid-amount"]',
       'input[data-qa="bid-amount-input"]',
@@ -308,6 +322,8 @@
     ],
     // 4. Amount Input (First Milestone Amount)
     milestoneAmount: [
+      'fl-input[class*="MilestoneRequest-amount"] input',
+      '.MilestoneRequest-amount input',
       'input[formcontrolname="milestoneAmount"]',
       'input[data-qa="milestone-amount"]',
       'input[data-qa="milestone-amount-input"]',
@@ -316,6 +332,7 @@
     ],
     // 5. Milestone Description Input (READ-ONLY FOR AUTOBID - NEVER MODIFY)
     milestoneDescription: [
+      'input[placeholder*="describe your milestone" i]',
       'input[formcontrolname="milestoneDescription"]',
       'input[data-qa="milestone-description"]',
       'input[data-qa="milestone-description-input"]',
@@ -359,6 +376,88 @@
   }
 
   /**
+   * Text that identifies an input: its own attributes plus any label wrapping it.
+   * Exact selectors break whenever Freelancer renames a formcontrolname, so the
+   * visible label is used as the durable fallback signal.
+   */
+  function fieldContextText(el) {
+    if (!el) return '';
+    const parts = [];
+
+    for (const attr of ['placeholder', 'aria-label', 'name', 'formcontrolname', 'data-qa', 'id', 'title']) {
+      const v = el.getAttribute ? el.getAttribute(attr) : null;
+      if (v) parts.push(v);
+    }
+
+    try {
+      const labelledBy = el.getAttribute('aria-labelledby');
+      if (labelledBy) {
+        for (const id of labelledBy.split(/\s+/)) {
+          const lbl = document.getElementById(id);
+          if (lbl) parts.push(lbl.textContent || '');
+        }
+      }
+      if (el.id) {
+        const forLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (forLabel) parts.push(forLabel.textContent || '');
+      }
+    } catch (e) {}
+
+    // Walk up the wrappers (fl-input, form row, label) collecting label text. Stop as soon
+    // as an ancestor holds another form control, because from there up the text belongs to
+    // the sibling fields too and would make every input look like every other one.
+    let parent = el.parentElement;
+    let depth = 0;
+    while (parent && depth < 4) {
+      if (parent.querySelectorAll('input, textarea, select').length > 1) break;
+      const text = (parent.innerText || parent.textContent || '').trim();
+      if (text && text.length <= 160) parts.push(text);
+      parent = parent.parentElement;
+      depth++;
+    }
+
+    return parts.join(' ').replace(/ /g, ' ').replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  const FIELD_HINTS = {
+    bidAmount: ['bid amount', 'your bid', 'paid to you', 'you will receive', 'bid on this project', 'amount'],
+    milestoneAmount: ['milestone amount', 'first milestone', 'payment amount'],
+    period: ['deliver', 'delivery', 'days', 'period', 'timeframe', 'duration', 'turnaround'],
+  };
+
+  /**
+   * Fallback finder: scan the real inputs in the bid form and pick by label text.
+   */
+  function findFieldByContext(kind, exclude = []) {
+    const container = findBidFormContainer();
+    const hints = FIELD_HINTS[kind] || [];
+    const inputs = queryDeepAll('input', container);
+
+    const matches = [];
+    for (const el of inputs) {
+      if (exclude.includes(el)) continue;
+      if (isChatOrMessengerElement(el)) continue;
+      if (isMilestoneDescriptionElement(el)) continue;
+      if (!isElementVisible(el)) continue;
+      if (el.type === 'checkbox' || el.type === 'radio' || el.type === 'hidden' || el.readOnly) continue;
+
+      const context = fieldContextText(el);
+      const hintIndex = hints.findIndex((h) => context.includes(h));
+      if (hintIndex === -1) continue;
+
+      // Earlier hints are more specific, and a number input is far more likely
+      // to be the amount or day count than a free text box.
+      let score = (hints.length - hintIndex) * 10;
+      if (el.type === 'number') score += 5;
+      matches.push({ el, score });
+    }
+
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => b.score - a.score);
+    return matches[0].el;
+  }
+
+  /**
    * Find Proposal field specifically
    */
   function findSafeProposalField() {
@@ -385,10 +484,11 @@
       for (const el of candidates) {
         if (isChatOrMessengerElement(el)) continue;
         if (isMilestoneDescriptionElement(el)) continue;
+        if (!isElementVisible(el)) continue;
         return el;
       }
     }
-    return null;
+    return findFieldByContext('period');
   }
 
   /**
@@ -401,10 +501,12 @@
       for (const el of candidates) {
         if (isChatOrMessengerElement(el)) continue;
         if (isMilestoneDescriptionElement(el)) continue;
+        if (!isElementVisible(el)) continue;
         return el;
       }
     }
-    return null;
+    const periodEl = findSafeDeliveryDaysField();
+    return findFieldByContext('bidAmount', periodEl ? [periodEl] : []);
   }
 
   /**
@@ -417,10 +519,13 @@
       for (const el of candidates) {
         if (isChatOrMessengerElement(el)) continue;
         if (isMilestoneDescriptionElement(el)) continue;
+        if (!isElementVisible(el)) continue;
         return el;
       }
     }
-    return null;
+    // Must never collide with the bid amount or delivery days field.
+    const exclude = [findSafeBidAmountField(), findSafeDeliveryDaysField()].filter(Boolean);
+    return findFieldByContext('milestoneAmount', exclude);
   }
 
   /**
@@ -1172,6 +1277,57 @@
     }
   }
 
+  /**
+   * A bid upgrade is free only when its price is literally zero or it is labelled FREE.
+   * A substring test for "$0" is not enough: Freelancer prices Sealed at "$0.10 USD" on
+   * plenty of projects, and that string contains "$0", which would buy a paid upgrade.
+   */
+  function isUpgradeFree(label) {
+    const text = (label || '').replace(/ /g, ' ').toLowerCase();
+    if (!text) return false;
+
+    const prices = text.match(/[$€£]\s*\d+(?:[.,]\d+)?/g) || [];
+    for (const price of prices) {
+      const value = parseFloat(price.replace(/[^0-9.,]/g, '').replace(',', '.'));
+      if (!isNaN(value) && value > 0) return false;
+    }
+    if (prices.length > 0) return true;
+    return /\bfree\b/.test(text);
+  }
+
+  /**
+   * Tick a bid upgrade checkbox, but only when it is confirmed free.
+   * The upgrade checkboxes carry randomised ids and no name, so they are matched by label.
+   */
+  function tickFreeUpgrade(keyword, enabled) {
+    if (!enabled) return;
+
+    const container = findBidFormContainer();
+    for (const box of queryDeepAll('input[type="checkbox"]', container)) {
+      if (box.checked) continue;
+
+      let label = '';
+      let parent = box.parentElement;
+      let depth = 0;
+      while (parent && depth < 6) {
+        const text = (parent.innerText || '').replace(/\s+/g, ' ').trim();
+        if (text.length > label.length) label = text;
+        parent = parent.parentElement;
+        depth++;
+      }
+
+      if (!label.toLowerCase().includes(keyword)) continue;
+
+      if (!isUpgradeFree(label)) {
+        console.log(`[AutoBid] Skipping paid ${keyword} upgrade: ${label.slice(0, 60)}`);
+        continue;
+      }
+
+      box.click();
+      console.log(`[AutoBid] Selected confirmed free ${keyword} upgrade.`);
+    }
+  }
+
   // Attempt to autofill fields repeatedly until elements are rendered
   let autofillRunning = false;
   async function attemptAutofill(bidData) {
@@ -1216,9 +1372,25 @@
     let filledPeriod = false;
     let capturedOriginalDesc = null;
 
+    let loggedFieldResolution = false;
+
     const startTime = Date.now();
     const interval = setInterval(() => {
       maybeOpenBidForm();
+
+      // One-time report of which fields resolved, so a failure says exactly what was missing.
+      if (!loggedFieldResolution && Date.now() - startTime > 2000) {
+        loggedFieldResolution = true;
+        const describe = (el) => {
+          if (!el) return 'NOT FOUND';
+          const id = el.getAttribute('formcontrolname') || el.getAttribute('data-qa') || el.getAttribute('name') || el.id || '';
+          return `found (${el.tagName.toLowerCase()}${el.type ? `[${el.type}]` : ''}${id ? ` ${id}` : ''})`;
+        };
+        console.log('[AutoBid Fields] Proposal:', describe(findSafeProposalField()));
+        console.log('[AutoBid Fields] Bid Amount:', describe(findSafeBidAmountField()));
+        console.log('[AutoBid Fields] Delivery Days:', describe(findSafeDeliveryDaysField()));
+        console.log('[AutoBid Fields] Milestone Amount:', describe(findSafeAmountField()));
+      }
 
       // Capture milestone description immediately to ensure it remains untouched
       const milestoneDescEl = findMilestoneDescriptionField();
@@ -1264,35 +1436,13 @@
         console.log('[AutoBid] Filled Delivery Days field safely:', bidData.period);
       }
 
-      // 5. Free Bid Upgrades check ($0.00 / FREE verified only)
+      // 5. Paid bid upgrades are opt-in and only ever taken when genuinely free.
       try {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
           chrome.storage.local.get('config').then((res) => {
             const cfg = res.config || {};
-            if (cfg.allowFreeSealedUpgrade) {
-              const sealedBoxes = document.querySelectorAll('input[type="checkbox"][name*="sealed"], input[type="checkbox"][id*="sealed"], fl-checkbox[name*="sealed"]');
-              sealedBoxes.forEach((box) => {
-                const parentText = (box.closest('label') || box.closest('div') || box.parentElement)?.innerText || '';
-                if (parentText.toLowerCase().includes('free') || parentText.includes('$0') || parentText.includes('0.00')) {
-                  if (box.type === 'checkbox' && !box.checked) {
-                    box.click();
-                    console.log('[AutoBid] Selected verified $0.00 Free Sealed upgrade.');
-                  }
-                }
-              });
-            }
-            if (cfg.allowFreeNdaUpgrade) {
-              const ndaBoxes = document.querySelectorAll('input[type="checkbox"][name*="nda"], input[type="checkbox"][id*="nda"], fl-checkbox[name*="nda"]');
-              ndaBoxes.forEach((box) => {
-                const parentText = (box.closest('label') || box.closest('div') || box.parentElement)?.innerText || '';
-                if (parentText.toLowerCase().includes('free') || parentText.includes('$0') || parentText.includes('0.00')) {
-                  if (box.type === 'checkbox' && !box.checked) {
-                    box.click();
-                    console.log('[AutoBid] Selected verified $0.00 Free NDA upgrade.');
-                  }
-                }
-              });
-            }
+            tickFreeUpgrade('sealed', cfg.allowFreeSealedUpgrade);
+            tickFreeUpgrade('nda', cfg.allowFreeNdaUpgrade);
           });
         }
       } catch (e) {}
@@ -1305,7 +1455,7 @@
 
       // Check completion state
       const isComplete = filledProposal && filledBidAmount;
-      const isTimedOut = Date.now() - startTime > 18000;
+      const isTimedOut = Date.now() - startTime > 25000;
 
       if (isComplete || isTimedOut) {
         clearInterval(interval);
@@ -1319,8 +1469,13 @@
             sessionStorage.removeItem('__freelancer_autobid_hash__');
           } catch (e) {}
         } else if (isTimedOut) {
-          console.warn('[AutoBid] Form elements not found before timeout.');
-          handleTerminalFailure('Bid form missing or timed out');
+          const missing = [];
+          if (!filledProposal) missing.push('Proposal');
+          if (!filledBidAmount) missing.push('Bid Amount');
+          if (!filledPeriod) missing.push('Delivery Days');
+          const detail = missing.length ? `Could not fill: ${missing.join(', ')}` : 'Bid form missing or timed out';
+          console.warn(`[AutoBid] ${detail}`);
+          handleTerminalFailure(detail);
         }
       }
     }, 300);
