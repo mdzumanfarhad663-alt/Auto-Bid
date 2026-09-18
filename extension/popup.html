@@ -171,11 +171,15 @@
 
   <div class="btn-group">
     <button id="pollNowBtn" class="btn btn-secondary">⚡ Poll Feed Now</button>
-    <a href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Dashboard</a>
+    <a id="openDashboardLink" href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Dashboard</a>
   </div>
 
-  <div class="footer-note">
-    Connected to Local Express Hub (port 3000)
+  <div class="btn-group" style="margin-top: 6px;">
+    <button id="resetSeenBtn" class="btn btn-secondary" style="width: 100%;">♻️ Re-check Seen Projects</button>
+  </div>
+
+  <div id="resetSeenStatus" class="footer-note">
+    Clears the seen list so current feed projects are evaluated again.
   </div>
 
   <script src="popup.js"></script>

@@ -103,6 +103,10 @@ let lastPollAt = 0;
 let lastPollSummary = null;
 let lastError = null;
 
+// Projects whose proposal generation failed for a recoverable reason, and how often.
+const proposalFailureCounts = new Map();
+const MAX_PROPOSAL_ATTEMPTS = 3;
+
 async function reportHeartbeat(extra = {}) {
   const payload = {
     version: chrome.runtime.getManifest().version,
@@ -111,6 +115,7 @@ async function reportHeartbeat(extra = {}) {
     lastPollSummary,
     lastError,
     queueLength: bidQueue.length,
+    processedCount: processedIds.size,
     activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title, tabId: activeBid.tabId } : null,
     config: {
       autoBidEnabled: activeConfig.autoBidEnabled,
@@ -393,6 +398,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Forget which projects have been seen, so the current feed is evaluated again.
+  if (message.type === 'CLEAR_PROCESSED_IDS') {
+    const cleared = processedIds.size;
+    processedIds = new Set();
+    proposalFailureCounts.clear();
+    chrome.storage.local.set({ processedIds: [] });
+    console.log(`[FreelancerAutoBid] Cleared ${cleared} seen project ids.`);
+    sendResponse({ success: true, cleared });
+    return true;
+  }
+
   if (message.type === 'SET_DASHBOARD_URL') {
     dashboardUrl = (message.url || '').trim() || LOCAL_DASHBOARD_URL;
     chrome.storage.local.set({ dashboardUrl });
@@ -587,9 +603,21 @@ async function runPollingCycle() {
         project.skipReason = `OpenAI Error: ${genError.message}`;
         project.status = 'FAILED';
         await recordProjectResult(project);
-        processedIds.add(project.id);
+
+        // A missing key, a rate limit or a network blip is recoverable, so the project is
+        // NOT marked as seen: marking it here permanently hides a biddable project from
+        // every later poll. It is retried on the next cycles, then given up on.
+        const attempts = (proposalFailureCounts.get(project.id) || 0) + 1;
+        proposalFailureCounts.set(project.id, attempts);
+        if (attempts >= MAX_PROPOSAL_ATTEMPTS) {
+          console.warn(`[FreelancerAutoBid] Giving up on project ${project.id} after ${attempts} proposal attempts.`);
+          processedIds.add(project.id);
+          proposalFailureCounts.delete(project.id);
+        }
         continue;
       }
+
+      proposalFailureCounts.delete(project.id);
 
       // Submit Bid or Simulate / Dry-Run
       if (activeConfig.autoBidEnabled && proposal) {

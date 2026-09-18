@@ -21,11 +21,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveDashboardBtn = document.getElementById('saveDashboardBtn');
   const dashboardStatus = document.getElementById('dashboardStatus');
 
+  const resetSeenBtn = document.getElementById('resetSeenBtn');
+  const resetSeenStatus = document.getElementById('resetSeenStatus');
+  const openDashboardLink = document.getElementById('openDashboardLink');
+
   chrome.storage.local.get('dashboardUrl', (data) => {
-    if (dashboardUrlInput) {
-      dashboardUrlInput.value = data.dashboardUrl || 'http://localhost:3000';
-    }
+    const url = data.dashboardUrl || 'http://localhost:3000';
+    if (dashboardUrlInput) dashboardUrlInput.value = url;
+    if (openDashboardLink) openDashboardLink.href = url;
   });
+
+  if (resetSeenBtn) {
+    resetSeenBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'CLEAR_PROCESSED_IDS' }, (res) => {
+        if (resetSeenStatus) {
+          resetSeenStatus.textContent = `✓ Cleared ${res?.cleared ?? 0} seen projects. Click Poll Feed Now.`;
+          resetSeenStatus.style.color = '#34d399';
+        }
+      });
+    });
+  }
 
   if (saveDashboardBtn) {
     saveDashboardBtn.addEventListener('click', () => {
