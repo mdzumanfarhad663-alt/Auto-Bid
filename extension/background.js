@@ -96,73 +96,11 @@ function normalizeBidAmount(amount) {
 }
 
 /**
- * Centralized Project Tab Auto-Close Scheduler (10-Second Delay)
- * Strictly verifies tab ownership to never touch user's personal tabs.
- * Waits 10 seconds on BOTH SUCCESS and FAILURE, then activates the main tab and closes this project tab.
+ * Centralized Project Tab Auto-Close (Permanently Disabled)
+ * Tabs are intentionally preserved open so the user can review bids and actions without unexpected closes.
  */
 function scheduleProjectTabClose(tabId, reason, delayMs = 10000) {
-  if (!tabId) return;
-
-  // Verify tab ownership
-  if (!autoBidOpenedTabs.has(tabId)) {
-    console.log(`[AutoBid Tab Safety] Tab ${tabId} is not in tracked AutoBid collection. Ignoring close request.`);
-    return;
-  }
-
-  // Prevent duplicate timers
-  if (scheduledTabCloses.has(tabId)) {
-    console.log(`[AutoBid Tab Close] Close timer already active for tab ${tabId}. Reason: ${reason}`);
-    return;
-  }
-
-  console.log(`[TAB] Scheduled close for AutoBid tab ${tabId} in ${delayMs / 1000}s. Reason: ${reason}`);
-
-  const timerId = setTimeout(() => {
-    scheduledTabCloses.delete(tabId);
-    autoBidOpenedTabs.delete(tabId);
-
-    // Verify tab still exists before attempting removal
-    if (chrome.tabs && chrome.tabs.get) {
-      chrome.tabs.get(tabId, (tab) => {
-        if (chrome.runtime.lastError || !tab) {
-          console.log(`[TAB] Tab ${tabId} already closed or not found.`);
-          return;
-        }
-
-        // Return focus to main project search / job-list / dashboard tab prior to tab removal
-        if (chrome.tabs.query) {
-          chrome.tabs.query({ windowId: tab.windowId }, (tabs) => {
-            if (tabs && tabs.length > 1) {
-              const mainFeedTab = tabs.find(
-                (t) => t.id !== tabId && t.url && (t.url.includes('/jobs') || t.url.includes('/search') || t.url.includes('freelancer.com') || t.url.includes('localhost:3000'))
-              );
-              const fallbackTab = tabs.find((t) => t.id !== tabId);
-              const targetTab = mainFeedTab || fallbackTab;
-              if (targetTab && targetTab.id) {
-                chrome.tabs.update(targetTab.id, { active: true }, () => {});
-              }
-            }
-
-            chrome.tabs.remove(tabId, () => {
-              if (chrome.runtime.lastError) {
-                console.warn(`[TAB] Could not close tab ${tabId}:`, chrome.runtime.lastError.message);
-              } else {
-                console.log(`[TAB] Successfully closed AutoBid tab ${tabId} (${reason}). Returned to main project tab.`);
-              }
-            });
-          });
-        } else {
-          chrome.tabs.remove(tabId, () => {
-            if (chrome.runtime.lastError) {
-              console.warn(`[TAB] Could not close tab ${tabId}:`, chrome.runtime.lastError.message);
-            }
-          });
-        }
-      });
-    }
-  }, delayMs);
-
-  scheduledTabCloses.set(tabId, timerId);
+  console.log(`[AutoBid Tab Retention] Tab ${tabId} will remain open permanently. Auto-close disabled (requested: ${reason}).`);
 }
 
 // Clean up tab tracking if user manually closes tab
@@ -268,17 +206,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Centralized 10-second close handler for both Success and Failure
+  // Tab close requests are explicitly ignored to keep all project tabs open for user inspection
   if (message.type === 'SCHEDULE_TAB_CLOSE' || message.type === 'CLOSE_CURRENT_TAB' || message.type === 'BID_COMPLETED' || message.type === 'BID_FAILED') {
     const tabId = sender.tab ? sender.tab.id : message.tabId;
-    const reason = message.reason || (message.type === 'BID_FAILED' ? 'Terminal failure' : 'Bid completed');
-    const delay = typeof message.delayMs === 'number' ? message.delayMs : 10000;
-
-    if (tabId) {
-      autoBidOpenedTabs.add(tabId); // ensure ownership
-      scheduleProjectTabClose(tabId, reason, delay);
-    }
-    sendResponse({ success: true });
+    console.log(`[AutoBid Tab Retention] Tab ${tabId} will remain open permanently. Auto-close is disabled.`);
+    sendResponse({ success: true, keptOpen: true });
     return true;
   }
 

@@ -627,7 +627,8 @@
       const el = queryDeep(sel);
       if (el && el.offsetParent !== null) {
         return {
-          failed: true,
+          failed: false,
+          alreadyBid: true,
           reason: 'Bid already exists on this project'
         };
       }
@@ -635,24 +636,23 @@
     if (
       pageText.includes('you have already placed a bid') ||
       pageText.includes('your bid on this project') ||
-      pageText.includes('retract bid') ||
-      pageText.includes('edit bid')
+      pageText.includes('retract bid')
     ) {
       return {
-        failed: true,
+        failed: false,
+        alreadyBid: true,
         reason: 'Bid already exists on this project'
       };
     }
 
-    // 2. Project Status: Closed / Deleted / No longer accepting bids / Cancelled
-    const statusBanner = queryDeep('app-project-view-header .ProjectView-header-status, .project-status, app-project-status, [data-qa="project-status"], fl-banner[type="warning"]');
-    if (statusBanner) {
+    // 2. Project Status: Closed / Deleted / Cancelled
+    const statusBanner = queryDeep('app-project-view-header .ProjectView-header-status, .project-status, app-project-status, [data-qa="project-status"]');
+    if (statusBanner && statusBanner.offsetParent !== null) {
       const statusText = (statusBanner.textContent || '').toLowerCase();
       if (
         statusText.includes('closed') ||
         statusText.includes('deleted') ||
-        statusText.includes('cancelled') ||
-        statusText.includes('in draft')
+        statusText.includes('cancelled')
       ) {
         return {
           failed: true,
@@ -661,79 +661,15 @@
       }
     }
 
-    // 3. Verification & Account Eligibility Restrictions (Specific banners only)
-    const restrictBanner = queryDeep('fl-banner[type="warning"], fl-banner[type="danger"], .verification-required-banner');
-    if (restrictBanner) {
-      const bText = (restrictBanner.textContent || '').toLowerCase();
-      if (
-        bText.includes('identity verification required') ||
-        bText.includes('verify your phone') ||
-        bText.includes('account not eligible') ||
-        bText.includes('you have reached your bid limit')
-      ) {
-        return {
-          failed: true,
-          reason: `Restriction: ${bText.slice(0, 60)}`
-        };
-      }
-    }
-
-    // 6. Explicit Freelancer site/form error banners (Only real errors, never generic blocks)
-    const errorBanners = queryDeepAll('fl-banner[type="danger"] .banner-title, .banner-danger, [data-qa="error-message"]');
-    for (const b of errorBanners) {
-      if (b && b.offsetParent !== null) {
-        const text = (b.textContent || '').trim();
-        if (text && !text.toLowerCase().includes('success') && !text.toLowerCase().includes('verified')) {
-          return {
-            failed: true,
-            reason: `Freelancer notice: ${text.slice(0, 80)}`
-          };
-        }
-      }
-    }
-
-    // 7. Negative Keywords check
-    if (config && config.negativeKeywords && config.negativeKeywords.length > 0) {
-      for (const neg of config.negativeKeywords) {
-        const nLower = neg.trim().toLowerCase();
-        if (nLower && (title.includes(nLower) || pageText.includes(nLower))) {
-          return {
-            failed: true,
-            reason: `Disqualified by negative keyword: "${neg}"`
-          };
-        }
-      }
-    }
-
-    // 8. Blocked Client Country check
-    if (config && config.blockedCountries && config.blockedCountries.length > 0) {
-      const clientLocationEl = document.querySelector('.client-location, [data-qa="client-location"], app-client-info, .ProjectView-client-info');
-      if (clientLocationEl) {
-        const locText = clientLocationEl.textContent.toLowerCase();
-        for (const country of config.blockedCountries) {
-          const cLower = country.trim().toLowerCase();
-          if (cLower && locText.includes(cLower)) {
-            return {
-              failed: true,
-              reason: `Disqualified: Blocked client country (${country})`
-            };
-          }
-        }
-      }
-    }
-
     return { failed: false };
   }
 
   /**
-   * Show 10-Second Terminal Failure Notification Banner
+   * Show Informative Notification Banner (Tabs always remain open)
    */
   function showTerminalFailureBanner(reason) {
     const existing = document.getElementById('freelancer-autobid-floating-banner');
     if (existing) existing.remove();
-
-    let remaining = 10;
-    let cancelled = false;
 
     const banner = document.createElement('div');
     banner.id = 'freelancer-autobid-floating-banner';
@@ -744,13 +680,13 @@
       z-index: 99999999;
       background: #0f172a;
       color: #f8fafc;
-      border: 1px solid #ef4444;
+      border: 1px solid #3b82f6;
       border-radius: 14px;
       padding: 16px 20px;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 13px;
-      max-width: 400px;
+      max-width: 420px;
       animation: autobidSlideIn 0.3s ease-out;
     `;
 
@@ -763,79 +699,50 @@
       </style>
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></span>
-          <strong style="color: #f87171; font-size: 14px;">
-            ⚠️ AutoBid Skipped / Failed
+          <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 8px #38bdf8;"></span>
+          <strong style="color: #38bdf8; font-size: 14px;">
+            AutoBid Status Notice
           </strong>
         </div>
         <button id="autobid-close-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; line-height: 1;">&times;</button>
       </div>
       <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;">
-        <div style="color: #fca5a5; font-weight: 600; margin-bottom: 4px;">• ${reason}</div>
-        <div style="font-size: 12px; color: #94a3b8;">This project cannot be bid on. Logging failure &amp; cleaning up tab...</div>
-      </div>
-      <div style="background: #450a0a; border: 1px solid #7f1d1d; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
-        <div style="font-size: 12px; color: #fca5a5; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
-          <span>⏳ Closing tab in <span id="autobid-fail-countdown" style="font-size: 14px; font-weight: 700; color: #ffffff;">10</span>s...</span>
-        </div>
-        <div style="font-size: 11px; color: #f87171; margin-top: 4px;">Returning to main project search tab to continue scanning.</div>
+        <div style="color: #93c5fd; font-weight: 600; margin-bottom: 4px;">• ${reason}</div>
+        <div style="font-size: 12px; color: #94a3b8;">Tab is kept open so you can review and bid manually if needed.</div>
       </div>
       <div style="display: flex; gap: 8px;">
-        <button id="autobid-keep-tab-btn" style="flex: 1; background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
-          Keep Tab Open
+        <button id="autobid-retry-fill-btn" style="flex: 1; background: #2563eb; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          Retry Auto-Fill 🔄
         </button>
-        <button id="autobid-close-now-btn" style="flex: 1; background: #dc2626; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
-          Close Now ⚡
+        <button id="autobid-dismiss-btn" style="flex: 1; background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          Dismiss
         </button>
       </div>
     `;
 
     document.body.appendChild(banner);
 
-    document.getElementById('autobid-close-btn')?.addEventListener('click', () => {
-      cancelled = true;
+    document.getElementById('autobid-close-btn')?.addEventListener('click', () => banner.remove());
+    document.getElementById('autobid-dismiss-btn')?.addEventListener('click', () => banner.remove());
+    document.getElementById('autobid-retry-fill-btn')?.addEventListener('click', async () => {
       banner.remove();
+      autofillRunning = false;
+      const data = await getPendingBidData();
+      if (data) attemptAutofill(data);
     });
-
-    document.getElementById('autobid-keep-tab-btn')?.addEventListener('click', () => {
-      cancelled = true;
-      banner.remove();
-      console.log('[AutoBid] Tab close cancelled by user manual override.');
-    });
-
-    document.getElementById('autobid-close-now-btn')?.addEventListener('click', () => {
-      cancelled = true;
-      requestTabClose(reason, 0);
-    });
-
-    const timer = setInterval(() => {
-      if (cancelled) {
-        clearInterval(timer);
-        return;
-      }
-      remaining -= 1;
-      const countdownEl = document.getElementById('autobid-fail-countdown');
-      if (countdownEl) countdownEl.textContent = remaining.toString();
-      if (remaining <= 0) {
-        clearInterval(timer);
-      }
-    }, 1000);
   }
 
   /**
-   * Handle Terminal Failure: Log, display banner, notify background & trigger 10-second close
+   * Handle Terminal Notice: Log, display notice banner, notify background. NEVER closes tab.
    */
   function handleTerminalFailure(reason) {
-    console.warn(`[AutoBid Terminal Failure] ${reason}`);
-    console.log(`[BID] Failed: ${reason}`);
+    console.warn(`[AutoBid Notice] ${reason}`);
+    console.log(`[BID] Status: ${reason}. Tab will remain open permanently.`);
 
-    // Show 10s countdown banner on screen
+    // Show non-closing status banner on screen
     showTerminalFailureBanner(reason);
 
-    // Schedule 10s tab close in background
-    requestTabClose(reason, 10000);
-
-    // Send failure report to background service worker and local API
+    // Send report to background service worker (tab close disabled)
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
@@ -880,22 +787,11 @@
   }
 
   /**
-   * Centralized 10-Second Tab Close Dispatcher
-   * Sends SCHEDULE_TAB_CLOSE to background service worker
+   * Tab Close Dispatcher (Permanently Disabled)
+   * Tabs are strictly kept open for manual review and monitoring.
    */
   function requestTabClose(reason, delayMs = 10000) {
-    console.log(`[TAB] Closing AutoBid project tab in ${delayMs / 1000} seconds. (${reason})`);
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'SCHEDULE_TAB_CLOSE',
-          delayMs: delayMs,
-          reason: reason,
-        });
-      }
-    } catch (e) {
-      console.warn('[AutoBid Tab Close] Could not dispatch tab close message:', e);
-    }
+    console.log(`[TAB Retention] Tab close is disabled by user configuration. Tab will stay open permanently. (${reason})`);
   }
 
   /**
@@ -1055,33 +951,20 @@
                   ✅ Bid Successfully Confirmed!
                 </div>
                 <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                  ⏳ Waiting 10 seconds... Closing tab &amp; returning to main project feed in <span id="autobid-success-close-countdown" style="font-weight:700;">10</span>s.
+                  🎉 Your proposal and pricing have been submitted. Tab kept open for your review.
                 </div>
               `;
             }
             if (cancelBtn) cancelBtn.style.display = 'none';
             if (submitNowBtn) submitNowBtn.style.display = 'none';
 
-            console.log('[BID] Bid successfully confirmed');
-
-            // Schedule 10-second close ONLY after button has been clicked
-            requestTabClose('Bid successfully confirmed', 10000);
-
-            // Success countdown ticker on banner
-            let successRemain = 10;
-            const sTimer = setInterval(() => {
-              successRemain -= 1;
-              const el = document.getElementById('autobid-success-close-countdown');
-              if (el) el.textContent = successRemain.toString();
-              if (successRemain <= 0) clearInterval(sTimer);
-            }, 1000);
+            console.log('[BID] Bid successfully confirmed. Tab will remain open permanently.');
 
             // Post-click verification watcher: check for post-submission error banners
             setTimeout(async () => {
               const termCheck = await scanPageForTerminalFailures();
               if (termCheck.failed && !checkSubmissionSuccess()) {
-                console.warn('[AutoBid] Post-submission failure detected:', termCheck.reason);
-                handleTerminalFailure(termCheck.reason);
+                console.warn('[AutoBid] Post-submission notice:', termCheck.reason);
               }
             }, 2500);
 
@@ -1155,10 +1038,16 @@
     if (autofillRunning) return;
     autofillRunning = true;
 
-    // Comprehensive in-page terminal failure & qualification check
+    // In-page status check
     const termCheck = await scanPageForTerminalFailures();
+    if (termCheck.alreadyBid) {
+      console.log('[AutoBid] You have already placed a bid on this project. Keeping tab open permanently.');
+      showTerminalFailureBanner('You have already placed a bid on this project.');
+      autofillRunning = false;
+      return;
+    }
     if (termCheck.failed) {
-      console.warn('[AutoBid Safety] In-Page terminal condition / qualification failed:', termCheck.reason);
+      console.warn('[AutoBid Safety] Notice:', termCheck.reason);
       handleTerminalFailure(termCheck.reason);
       autofillRunning = false;
       return;
