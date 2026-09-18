@@ -678,15 +678,15 @@
       }
     }
 
-    // 6. Explicit Freelancer site/form error banners
-    const errorBanners = queryDeepAll('fl-banner[type="danger"], fl-banner[type="error"], .banner-danger, .error-message, [data-qa="error-message"]');
+    // 6. Explicit Freelancer site/form error banners (Only real errors, never generic blocks)
+    const errorBanners = queryDeepAll('fl-banner[type="danger"] .banner-title, .banner-danger, [data-qa="error-message"]');
     for (const b of errorBanners) {
       if (b && b.offsetParent !== null) {
         const text = (b.textContent || '').trim();
-        if (text && !text.toLowerCase().includes('success')) {
+        if (text && !text.toLowerCase().includes('success') && !text.toLowerCase().includes('verified')) {
           return {
             failed: true,
-            reason: `Freelancer error: ${text.slice(0, 80)}`
+            reason: `Freelancer notice: ${text.slice(0, 80)}`
           };
         }
       }
