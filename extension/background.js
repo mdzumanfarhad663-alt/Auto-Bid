@@ -70,7 +70,7 @@ HARD RULES:
   autoSubmitDelaySeconds: 2,
   autoOpenQualified: true,
   autoCloseTabOnSuccess: true,
-  autoCloseDelaySeconds: 10,
+  autoCloseDelaySeconds: 20,
   closeTabOnFailure: true,
 };
 
@@ -84,6 +84,16 @@ const notificationUrls = new Map();
 const autoBidOpenedTabs = new Set();
 const scheduledTabCloses = new Map(); // tabId -> timerId
 
+// Serial bid queue: exactly one project tab open at a time. A poll cycle can match several
+// projects, and opening them all at once floods the browser and makes every tab race over
+// the single pendingAutoBid payload in storage.
+let bidQueue = [];
+let activeBid = null; // { tabId, projectId, title, startedAt }
+let bidWatchdogTimer = null;
+
+const QUEUE_MAX_AGE_MS = 15 * 60 * 1000; // a project this stale has too many bids to be worth one
+const BID_WATCHDOG_MS = 3 * 60 * 1000; // a stuck tab must never freeze the queue forever
+
 /**
  * Centralized Bid Amount Normalization (Ceiling / Round-Up)
  */
@@ -96,11 +106,126 @@ function normalizeBidAmount(amount) {
 }
 
 /**
- * Centralized Project Tab Auto-Close (Permanently Disabled)
- * Tabs are intentionally preserved open so the user can review bids and actions without unexpected closes.
+ * Close an AutoBid-opened project tab after a delay, so the result stays readable first.
  */
-function scheduleProjectTabClose(tabId, reason, delayMs = 10000) {
-  console.log(`[AutoBid Tab Retention] Tab ${tabId} will remain open permanently. Auto-close disabled (requested: ${reason}).`);
+function scheduleProjectTabClose(tabId, reason, delayMs) {
+  if (!tabId) return;
+  if (scheduledTabCloses.has(tabId)) return;
+
+  const wait = Number.isFinite(delayMs) ? delayMs : (activeConfig.autoCloseDelaySeconds || 20) * 1000;
+  console.log(`[AutoBid Tab] Closing tab ${tabId} in ${Math.round(wait / 1000)}s (${reason})`);
+
+  const timer = setTimeout(() => {
+    scheduledTabCloses.delete(tabId);
+    chrome.tabs.remove(tabId).catch(() => {
+      // Already gone, which is fine: onRemoved has done the bookkeeping.
+    });
+  }, wait);
+
+  scheduledTabCloses.set(tabId, timer);
+}
+
+/**
+ * Queue a qualified project instead of opening it immediately.
+ */
+function enqueueProjectForBid(entry) {
+  if (!entry || !entry.url) return;
+
+  const alreadyQueued = bidQueue.some((q) => q.projectId === entry.projectId);
+  const isActive = activeBid && activeBid.projectId === entry.projectId;
+  if (alreadyQueued || isActive) return;
+
+  bidQueue.push({ ...entry, queuedAt: Date.now() });
+  console.log(`[AutoBid Queue] Queued "${entry.title}" (queue length: ${bidQueue.length})`);
+  processBidQueue();
+}
+
+/**
+ * Open the next queued project, but only when no bid is currently in flight.
+ */
+function processBidQueue() {
+  if (activeBid) return;
+  if (activeConfig.autoOpenQualified === false) return;
+
+  // Drop anything that sat in the queue too long to be worth bidding on.
+  const cutoff = Date.now() - QUEUE_MAX_AGE_MS;
+  const fresh = bidQueue.filter((e) => e.queuedAt >= cutoff);
+  if (fresh.length !== bidQueue.length) {
+    console.log(`[AutoBid Queue] Dropped ${bidQueue.length - fresh.length} stale project(s)`);
+    bidQueue = fresh;
+  }
+
+  const next = bidQueue.shift();
+  if (!next) return;
+
+  // Claim the slot synchronously. Opening a tab is async, and several projects can be
+  // enqueued in the same tick, so waiting for the callback to set activeBid would let
+  // every one of them past the guard above and open all their tabs at once.
+  activeBid = { tabId: null, projectId: next.projectId, title: next.title, startedAt: Date.now() };
+
+  // The payload is written per project, immediately before its tab opens, so the content
+  // script in that tab can never pick up another project's proposal.
+  chrome.storage.local.set({
+    pendingAutoBid: {
+      proposal: next.proposal,
+      amount: next.amount,
+      period: next.period,
+      autoSubmit: activeConfig.handsFreeAutoSubmit !== false,
+      projectId: next.projectId,
+      timestamp: Date.now(),
+    },
+    handsFreeAutoSubmit: activeConfig.handsFreeAutoSubmit !== false,
+    autoSubmitDelaySeconds: activeConfig.autoSubmitDelaySeconds || 2,
+  }).then(() => {
+    chrome.tabs.create({ url: next.url, active: true }, (newTab) => {
+      if (!newTab || !newTab.id) {
+        console.warn('[AutoBid Queue] Failed to open project tab, moving to next.');
+        activeBid = null;
+        processBidQueue();
+        return;
+      }
+
+      autoBidOpenedTabs.add(newTab.id);
+      if (activeBid && activeBid.projectId === next.projectId) {
+        activeBid.tabId = newTab.id;
+      }
+      console.log(`[AutoBid Queue] Bidding on "${next.title}" in tab ${newTab.id} (${bidQueue.length} waiting)`);
+
+      if (bidWatchdogTimer) clearTimeout(bidWatchdogTimer);
+      bidWatchdogTimer = setTimeout(() => {
+        if (activeBid && activeBid.tabId === newTab.id) {
+          console.warn('[AutoBid Queue] Bid timed out with no result, releasing the queue.');
+          finishActiveBid('watchdog timeout', activeConfig.closeTabOnFailure !== false);
+        }
+      }, BID_WATCHDOG_MS);
+    });
+  });
+}
+
+/**
+ * Release the queue after the active bid settles, then start the next one.
+ */
+function finishActiveBid(reason, shouldClose) {
+  if (!activeBid) return;
+
+  const { tabId, title } = activeBid;
+  activeBid = null;
+
+  if (bidWatchdogTimer) {
+    clearTimeout(bidWatchdogTimer);
+    bidWatchdogTimer = null;
+  }
+
+  console.log(`[AutoBid Queue] Finished "${title}": ${reason}`);
+
+  const delayMs = (activeConfig.autoCloseDelaySeconds || 20) * 1000;
+  if (shouldClose) {
+    scheduleProjectTabClose(tabId, reason, delayMs);
+    // Start the next project as the finished tab closes, so only one is ever open.
+    setTimeout(processBidQueue, delayMs);
+  } else {
+    processBidQueue();
+  }
 }
 
 // Clean up tab tracking if user manually closes tab
@@ -111,6 +236,11 @@ if (chrome.tabs && chrome.tabs.onRemoved) {
       scheduledTabCloses.delete(tabId);
     }
     autoBidOpenedTabs.delete(tabId);
+
+    // Closing the active tab by hand is a valid way to skip a project.
+    if (activeBid && activeBid.tabId === tabId) {
+      finishActiveBid('tab closed', false);
+    }
   });
 }
 
@@ -206,11 +336,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Tab close requests are explicitly ignored to keep all project tabs open for user inspection
-  if (message.type === 'SCHEDULE_TAB_CLOSE' || message.type === 'CLOSE_CURRENT_TAB' || message.type === 'BID_COMPLETED' || message.type === 'BID_FAILED') {
+  // A bid finished: close its tab after the review delay, then release the queue.
+  if (message.type === 'BID_AUTO_SUBMITTED' || message.type === 'BID_COMPLETED') {
     const tabId = sender.tab ? sender.tab.id : message.tabId;
-    console.log(`[AutoBid Tab Retention] Tab ${tabId} will remain open permanently. Auto-close is disabled.`);
-    sendResponse({ success: true, keptOpen: true });
+    if (activeBid && activeBid.tabId === tabId) {
+      finishActiveBid('bid submitted', activeConfig.autoCloseTabOnSuccess !== false);
+    } else if (tabId && autoBidOpenedTabs.has(tabId) && activeConfig.autoCloseTabOnSuccess !== false) {
+      scheduleProjectTabClose(tabId, 'bid submitted');
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // The project turned out to be closed, already bid on, or otherwise unbiddable.
+  if (message.type === 'BID_FAILED' || message.type === 'SCHEDULE_TAB_CLOSE' || message.type === 'CLOSE_CURRENT_TAB') {
+    const tabId = sender.tab ? sender.tab.id : message.tabId;
+    const reason = message.reason || 'bid not possible';
+    if (activeBid && activeBid.tabId === tabId) {
+      finishActiveBid(reason, activeConfig.closeTabOnFailure !== false);
+    } else if (tabId && autoBidOpenedTabs.has(tabId) && activeConfig.closeTabOnFailure !== false) {
+      scheduleProjectTabClose(tabId, reason);
+    }
+    sendResponse({ success: true });
     return true;
   }
 
@@ -370,19 +517,6 @@ async function runPollingCycle() {
 
       // Submit Bid or Simulate / Dry-Run
       if (activeConfig.autoBidEnabled && proposal) {
-        await chrome.storage.local.set({
-          pendingAutoBid: {
-            proposal,
-            amount: finalBidAmount,
-            period: project.bidPeriodDays || 5,
-            autoSubmit: activeConfig.handsFreeAutoSubmit !== false,
-            projectId: project.id,
-            timestamp: Date.now(),
-          },
-          handsFreeAutoSubmit: activeConfig.handsFreeAutoSubmit !== false,
-          autoSubmitDelaySeconds: activeConfig.autoSubmitDelaySeconds || 2,
-        });
-
         const autoSubmitFlag = activeConfig.handsFreeAutoSubmit !== false ? '1' : '0';
         const autobidHash = `#autobid_p=${encodeURIComponent(proposal)}&amount=${finalBidAmount}&period=${project.bidPeriodDays || 5}&auto_submit=${autoSubmitFlag}&autobid=1&pid=${project.id}`;
         const directApplyUrl = project.url ? `${project.url}${autobidHash}` : '';
@@ -401,14 +535,15 @@ async function runPollingCycle() {
             );
           }
 
-          // Autonomous mode: open tab automatically and track ownership
+          // Autonomous mode: queue the project. The queue opens one tab at a time.
           if (directApplyUrl && (activeConfig.autoOpenQualified !== false)) {
-            console.log('[FreelancerAutoBid] Autonomous Auto-Open matched project in tab:', project.id, directApplyUrl);
-            chrome.tabs.create({ url: directApplyUrl, active: true }, (newTab) => {
-              if (newTab && newTab.id) {
-                autoBidOpenedTabs.add(newTab.id);
-                console.log('[FreelancerAutoBid] Tracked AutoBid project tab:', newTab.id);
-              }
+            enqueueProjectForBid({
+              projectId: project.id,
+              title: project.title,
+              url: directApplyUrl,
+              proposal,
+              amount: finalBidAmount,
+              period: project.bidPeriodDays || 5,
             });
           }
         } else {

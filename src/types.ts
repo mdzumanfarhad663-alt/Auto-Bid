@@ -175,9 +175,9 @@ HARD RULES:
   handsFreeAutoSubmit: true, // Auto-clicks 'Place Bid' button on Freelancer without human touch
   autoSubmitDelaySeconds: 2, // 2-second countdown before auto-submit
   autoOpenQualified: true, // Automatically opens matched projects in a new tab for instant bidding
-  autoCloseTabOnSuccess: true, // Closes tab after success (10s delay)
-  autoCloseDelaySeconds: 10, // 10-second delay before tab closes so user can see success / confirmed state
-  closeTabOnFailure: true, // Automatically close tab after 10s if project fails or is ineligible
+  autoCloseTabOnSuccess: true, // Closes tab after success, then the next queued project opens
+  autoCloseDelaySeconds: 20, // Review window before the tab closes and the queue moves on
+  closeTabOnFailure: true, // Close the tab when the project is closed, already bid, or unbiddable
 };
 
 export interface BidLog {

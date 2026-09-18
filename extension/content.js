@@ -918,7 +918,7 @@
       </div>
       <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 12px;">
         <div style="color: #93c5fd; font-weight: 600; margin-bottom: 4px;">• ${reason}</div>
-        <div style="font-size: 12px; color: #94a3b8;">Tab is kept open so you can review and bid manually if needed.</div>
+        <div style="font-size: 12px; color: #94a3b8;">This tab closes shortly and the next queued project opens. Click Dismiss to keep it open.</div>
       </div>
       <div style="display: flex; gap: 8px;">
         <button id="autobid-retry-fill-btn" style="flex: 1; background: #2563eb; color: white; border: none; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;">
@@ -947,12 +947,10 @@
    */
   function handleTerminalFailure(reason) {
     console.warn(`[AutoBid Notice] ${reason}`);
-    console.log(`[BID] Status: ${reason}. Tab will remain open permanently.`);
 
-    // Show non-closing status banner on screen
     showTerminalFailureBanner(reason);
 
-    // Send report to background service worker (tab close disabled)
+    // Report to the background worker, which closes this tab and starts the next project.
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
@@ -997,11 +995,15 @@
   }
 
   /**
-   * Tab Close Dispatcher (Permanently Disabled)
-   * Tabs are strictly kept open for manual review and monitoring.
+   * Ask the background worker to close this project tab and release the bid queue.
+   * The background owns the timing, because it also decides which project opens next.
    */
-  function requestTabClose(reason, delayMs = 10000) {
-    console.log(`[TAB Retention] Tab close is disabled by user configuration. Tab will stay open permanently. (${reason})`);
+  function requestTabClose(reason) {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'SCHEDULE_TAB_CLOSE', reason });
+      }
+    } catch (e) {}
   }
 
   /**
@@ -1165,14 +1167,14 @@
                 ✅ Bid Successfully Confirmed!
               </div>
               <div style="font-size: 11px; color: #a7f3d0; margin-top: 2px;">
-                🎉 Your proposal and pricing have been submitted. Tab kept open for your review.
+                🎉 Proposal and pricing submitted. This tab closes shortly and the next project opens.
               </div>
             `;
           }
           if (cancelBtn) cancelBtn.style.display = 'none';
           if (submitNowBtn) submitNowBtn.style.display = 'none';
 
-          console.log('[BID] Bid successfully confirmed. Tab will remain open permanently.');
+          console.log('[BID] Bid successfully confirmed.');
 
           if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
             chrome.runtime.sendMessage({
@@ -1345,8 +1347,9 @@
     // In-page status check
     const termCheck = await scanPageForTerminalFailures();
     if (termCheck.alreadyBid) {
-      console.log('[AutoBid] You have already placed a bid on this project. Keeping tab open permanently.');
-      showTerminalFailureBanner('You have already placed a bid on this project.');
+      console.log('[AutoBid] A bid already exists on this project.');
+      // Still reported, otherwise the queue would wait on this tab until the watchdog fires.
+      handleTerminalFailure('You have already placed a bid on this project.');
       autofillRunning = false;
       return;
     }

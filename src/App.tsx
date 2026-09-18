@@ -38,8 +38,6 @@ export default function App() {
 
   const [isPolling, setIsPolling] = useState(false);
   const [pollCountdown, setPollCountdown] = useState<number>(30);
-  const openedProjectIdsRef = useRef<Set<number>>(new Set());
-  const isInitialLoadRef = useRef<boolean>(true);
 
   // Synthesized Web Audio chime on qualified new project
   const playAlertChime = useCallback(() => {
@@ -110,51 +108,13 @@ export default function App() {
         } catch (err) {}
       }
 
-      if (projectsRes.ok) {
-        const fetchedProjects: FreelancerProject[] = await projectsRes.json();
-
-        if (isInitialLoadRef.current) {
-          fetchedProjects.forEach((p) => openedProjectIdsRef.current.add(p.id));
-          isInitialLoadRef.current = false;
-        } else if (config?.autoBidEnabled && config?.autoOpenQualified !== false) {
-          for (const p of fetchedProjects) {
-            if (
-              (p.status === 'QUALIFIED' || p.status === 'BID_PLACED') &&
-              p.generatedProposal &&
-              !openedProjectIdsRef.current.has(p.id)
-            ) {
-              openedProjectIdsRef.current.add(p.id);
-
-              const safeBaseUrl =
-                p.url && !p.url.includes('sample-job') && p.id > 40000000
-                  ? `https://www.freelancer.com/projects/${p.id}`
-                  : p.url ||
-                    `https://www.freelancer.com/search/projects?q=${encodeURIComponent(
-                      p.jobs?.[0]?.name || 'web development'
-                    )}`;
-
-              const hashParams = new URLSearchParams();
-              if (p.generatedProposal) hashParams.set('autobid_p', p.generatedProposal);
-              hashParams.set('amount', String(p.bidAmount || p.budget?.minimum || 50));
-              hashParams.set('period', String(p.bidPeriodDays || config?.defaultDeliveryDays || 3));
-              hashParams.set('auto_submit', config?.handsFreeAutoSubmit !== false ? '1' : '0');
-              hashParams.set('autobid', '1');
-              hashParams.set('pid', String(p.id));
-
-              const targetUrl = `${safeBaseUrl}#${hashParams.toString()}`;
-              try {
-                window.open(targetUrl, '_blank', 'noopener,noreferrer');
-              } catch (err) {
-                console.warn('Popup blocked or failed to open tab:', err);
-              }
-            }
-          }
-        }
-      }
+      // Opening project tabs belongs to the extension alone. It owns chrome.tabs, so it is
+      // the only side that can run a one-at-a-time queue and close a tab when the bid ends.
+      // The dashboard opening its own tabs bypassed that queue and raced it.
     } catch (e) {
       console.warn('Failed to fetch initial sync data:', e);
     }
-  }, [config?.autoBidEnabled, config?.autoOpenQualified, config?.defaultDeliveryDays, config?.handsFreeAutoSubmit]);
+  }, []);
 
   useEffect(() => {
     fetchData();
