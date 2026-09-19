@@ -53,7 +53,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (status.activeBid) lines.push(`<span class="warn">Bidding now:</span> ${status.activeBid.title.slice(0, 40)}`);
     if (!status.activeConfig.openaiApiKey) lines.push('<span class="err">No OpenAI key — set it on the dashboard.</span>');
-    if (status.lastError) lines.push(`<span class="err">${String(status.lastError).slice(0, 90)}</span>`);
+    if (status.lastError) {
+      const ago = status.lastErrorAt ? Math.round((Date.now() - status.lastErrorAt) / 60000) : null;
+      const when = ago === null ? '' : ago < 1 ? ' (just now)' : ` (${ago}m ago)`;
+      lines.push(`<span class="err">Last poll error${when}: ${String(status.lastError).slice(0, 90)}</span>`);
+    }
     if (lines.length) activity.innerHTML = lines.join('<br>');
   };
 

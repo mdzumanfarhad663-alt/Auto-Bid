@@ -117,6 +117,12 @@ let isPolling = false;
 let lastPollAt = 0;
 let lastPollSummary = null;
 let lastError = null;
+let lastErrorAt = 0;
+
+function noteError(message) {
+  lastError = message;
+  lastErrorAt = Date.now();
+}
 
 // Projects whose proposal generation or relevance check failed for a recoverable
 // reason, and how often. Given up on after MAX_PROPOSAL_ATTEMPTS.
@@ -133,6 +139,7 @@ async function reportHeartbeat(extra = {}) {
     lastPollAt,
     lastPollSummary,
     lastError,
+    lastErrorAt,
     queueLength: bidQueue.length,
     processedCount: processedIds.size,
     activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title, tabId: activeBid.tabId } : null,
@@ -507,6 +514,7 @@ function handleMessage(message, sender, sendResponse) {
       lastPollAt,
       lastPollSummary,
       lastError,
+      lastErrorAt,
       queueLength: bidQueue.length,
       activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title } : null,
       configSource,
@@ -687,6 +695,11 @@ async function runPollingCycle() {
   const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, aiChecks: 0, aiRejected: 0, aiCostUSD: 0, topSkipReason: null, skipReasons: {} };
   const skipReasons = summary.skipReasons;
 
+  // An error describes one poll. Clearing it here means the popup only ever shows a
+  // failure from the most recent cycle, never one from before a fix or a cold start.
+  lastError = null;
+  lastErrorAt = 0;
+
   // Pick up filter changes made on the dashboard before evaluating this batch.
   await syncConfigFromDashboard();
 
@@ -763,7 +776,7 @@ async function runPollingCycle() {
           // Fail closed and retry later, the same way a failed proposal is handled.
           console.error('[FreelancerAutoBid] Relevance check failed:', relevanceError.message);
           summary.proposalErrors += 1;
-          lastError = `Relevance check failed: ${relevanceError.message}`;
+          noteError(`Relevance check failed: ${relevanceError.message}`);
           const attempts = (aiFailureCounts.get(project.id) || 0) + 1;
           aiFailureCounts.set(project.id, attempts);
           if (attempts >= MAX_PROPOSAL_ATTEMPTS) {
@@ -832,7 +845,7 @@ async function runPollingCycle() {
       } catch (genError) {
         console.error('[FreelancerAutoBid] Proposal generation failed:', genError.message);
         summary.proposalErrors += 1;
-        lastError = `Proposal generation failed: ${genError.message}`;
+        noteError(`Proposal generation failed: ${genError.message}`);
         project.skipReason = `OpenAI Error: ${genError.message}`;
         project.status = 'FAILED';
         await recordProjectResult(project);
@@ -916,7 +929,7 @@ async function runPollingCycle() {
     await persistProcessedIds();
   } catch (error) {
     console.error('[FreelancerAutoBid] Polling cycle failed:', error);
-    lastError = `Poll cycle failed: ${error.message}`;
+    noteError(`Poll cycle failed: ${error.message}`);
   } finally {
     isPolling = false;
   }
