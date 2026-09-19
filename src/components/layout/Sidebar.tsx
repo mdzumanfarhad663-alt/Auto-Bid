@@ -16,7 +16,8 @@ import {
   BookOpen,
   X,
   CheckCircle2,
-  Bot
+  Bot,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -115,6 +116,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           name: 'Setup Guide',
           to: '/guide',
           icon: BookOpen,
+        },
+        {
+          name: 'Admin',
+          to: '/admin',
+          icon: ShieldCheck,
         },
       ],
     },

@@ -18,11 +18,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pollNowBtn = $('pollNowBtn');
   const resetSeenBtn = $('resetSeenBtn');
   const resetSeenStatus = $('resetSeenStatus');
+  const tokenInput = $('tokenInput');
+  const saveTokenBtn = $('saveTokenBtn');
+  const tokenStatus = $('tokenStatus');
 
   versionLabel.textContent = `v${chrome.runtime.getManifest().version}`;
 
-  const { dashboardUrl: savedUrl } = await chrome.storage.local.get('dashboardUrl');
+  const { dashboardUrl: savedUrl, extensionToken: savedToken } = await chrome.storage.local.get(['dashboardUrl', 'extensionToken']);
   const dashboard = (savedUrl || 'http://localhost:3000').replace(/\/+$/, '');
+  const authHeaders = savedToken ? { Authorization: `Bearer ${savedToken}` } : {};
+  if (savedToken) {
+    tokenInput.value = savedToken;
+    tokenStatus.textContent = '✓ Token saved';
+    tokenStatus.style.color = '#34d399';
+  }
   dashboardUrlInput.value = dashboard;
   openDashboardLink.href = dashboard;
 
@@ -52,7 +61,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       $('eligibleCount').textContent = s.qualified || 0;
     }
     if (status.activeBid) lines.push(`<span class="warn">Bidding now:</span> ${status.activeBid.title.slice(0, 40)}`);
-    if (!status.activeConfig.openaiApiKey) lines.push('<span class="err">No OpenAI key — set it on the dashboard.</span>');
+    if (!status.hasExtensionToken) lines.push('<span class="err">No extension token. Generate one on Dashboard → Admin.</span>');
+    else if (status.lastAuthFailureAt && Date.now() - status.lastAuthFailureAt < 10 * 60000) lines.push('<span class="err">Dashboard rejected the token. Regenerate it on Dashboard → Admin.</span>');
+    if (!status.activeConfig.openaiApiKey) lines.push('<span class="err">No OpenAI key — set it on Dashboard → Admin.</span>');
     if (status.lastError) {
       const ago = status.lastErrorAt ? Math.round((Date.now() - status.lastErrorAt) / 60000) : null;
       const when = ago === null ? '' : ago < 1 ? ' (just now)' : ` (${ago}m ago)`;
@@ -66,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Bids placed today, from the dashboard's own count.
   try {
-    const res = await fetch(`${dashboard}/api/dashboard`);
+    const res = await fetch(`${dashboard}/api/dashboard`, { headers: authHeaders });
     if (res.ok) {
       const data = await res.json();
       $('bidsCount').textContent = data.stats?.bidsToday ?? 0;
@@ -82,6 +93,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res && res.dashboardUpdated === false) {
         masterSub.textContent = 'Saved locally; dashboard unreachable';
       }
+    });
+  });
+
+  saveTokenBtn.addEventListener('click', () => {
+    const token = (tokenInput.value || '').trim();
+    tokenStatus.textContent = 'Checking…';
+    tokenStatus.style.color = '#94a3b8';
+    chrome.runtime.sendMessage({ type: 'SET_EXTENSION_TOKEN', token }, (res) => {
+      if (res && res.success) {
+        tokenStatus.textContent = '✓ Token accepted by the dashboard';
+        tokenStatus.style.color = '#34d399';
+      } else {
+        tokenStatus.textContent = res && res.status === 401 ? '✗ Dashboard rejected this token' : `✗ Could not reach the dashboard (${res ? res.status : 'no response'})`;
+        tokenStatus.style.color = '#f87171';
+      }
+      refresh();
     });
   });
 

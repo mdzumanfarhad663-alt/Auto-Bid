@@ -27,14 +27,36 @@ function getDashboardUrl() {
   return (dashboardUrl || LOCAL_DASHBOARD_URL).replace(/\/+$/, '');
 }
 
+// Bearer token issued on the dashboard's Admin page. Every dashboard request carries it;
+// without it the dashboard answers 401 and this worker runs on cached config alone.
+let extensionToken = '';
+let lastAuthFailureAt = 0;
+
 async function loadDashboardUrl() {
   try {
-    const { dashboardUrl: stored } = await chrome.storage.local.get('dashboardUrl');
+    const { dashboardUrl: stored, extensionToken: storedToken } = await chrome.storage.local.get(['dashboardUrl', 'extensionToken']);
     if (stored && typeof stored === 'string' && stored.trim()) {
       dashboardUrl = stored.trim();
       console.log('[FreelancerAutoBid] Dashboard URL:', getDashboardUrl());
     }
+    if (typeof storedToken === 'string') extensionToken = storedToken.trim();
   } catch (e) {}
+}
+
+/**
+ * fetch() against the dashboard with the extension token attached.
+ * A 401/403 is remembered so the popup can say "token missing or rejected" instead of
+ * a generic failure.
+ */
+async function dashboardFetch(path, init = {}) {
+  const headers = { ...(init.headers || {}) };
+  if (extensionToken) headers.Authorization = `Bearer ${extensionToken}`;
+  const res = await fetch(`${getDashboardUrl()}${path}`, { ...init, headers });
+  if (res.status === 401 || res.status === 403) {
+    lastAuthFailureAt = Date.now();
+    noteError(extensionToken ? 'Dashboard rejected the extension token. Regenerate it on the Admin page.' : 'No extension token. Generate one on the dashboard Admin page and paste it into the popup.');
+  }
+  return res;
 }
 const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 
@@ -163,7 +185,7 @@ async function reportHeartbeat(extra = {}) {
   };
 
   try {
-    await fetch(`${getDashboardUrl()}/api/extension-heartbeat`, {
+    await dashboardFetch('/api/extension-heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -237,7 +259,7 @@ function recordOutcome(projectId, outcome, reason) {
   bidOutcomes[String(projectId)] = { outcome, reason: reason || '', at: Date.now() };
   processedIds.add(projectId);
 
-  fetch(`${getDashboardUrl()}/api/projects/${projectId}/outcome`, {
+  dashboardFetch(`/api/projects/${projectId}/outcome`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outcome, reason }),
@@ -518,6 +540,8 @@ function handleMessage(message, sender, sendResponse) {
       queueLength: bidQueue.length,
       activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title } : null,
       configSource,
+      hasExtensionToken: !!extensionToken,
+      lastAuthFailureAt,
     });
     return true;
   }
@@ -528,7 +552,7 @@ function handleMessage(message, sender, sendResponse) {
     const enabled = message.enabled !== false;
     activeConfig.autoBidEnabled = enabled;
     chrome.storage.local.set({ config: activeConfig });
-    fetch(`${getDashboardUrl()}/api/config`, {
+    dashboardFetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ autoBidEnabled: enabled }),
@@ -566,6 +590,17 @@ function handleMessage(message, sender, sendResponse) {
     persistProcessedIds();
     console.log(`[FreelancerAutoBid] Cleared ${cleared} seen project ids (${attempted.size} attempted kept).`);
     sendResponse({ success: true, cleared, kept: attempted.size });
+    return true;
+  }
+
+  if (message.type === 'SET_EXTENSION_TOKEN') {
+    extensionToken = String(message.token || '').trim();
+    chrome.storage.local.set({ extensionToken });
+    lastAuthFailureAt = 0;
+    // Prove it immediately so the popup can show success or failure.
+    dashboardFetch('/api/config')
+      .then((res) => sendResponse({ success: res.ok, status: res.status }))
+      .catch(() => sendResponse({ success: false, status: 0 }));
     return true;
   }
 
@@ -626,17 +661,29 @@ function handleMessage(message, sender, sendResponse) {
  */
 async function syncConfigFromDashboard() {
   try {
-    const res = await fetch(`${getDashboardUrl()}/api/config`);
+    const res = await dashboardFetch('/api/config');
     if (!res.ok) return false;
 
     const remoteConfig = await res.json();
     if (!remoteConfig || typeof remoteConfig !== 'object') return false;
 
     const localKey = activeConfig.openaiApiKey;
-    activeConfig = { ...DEFAULT_CONFIG, ...activeConfig, ...remoteConfig };
+    // The dashboard sends a masked key; the real one comes from /api/admin/secrets.
+    const { openaiApiKey: _masked, hasOpenAiKey, ...remoteRest } = remoteConfig;
+    activeConfig = { ...DEFAULT_CONFIG, ...activeConfig, ...remoteRest, openaiApiKey: localKey || '' };
 
-    // Keep a key held only by the extension when the dashboard has none.
-    if (!activeConfig.openaiApiKey && localKey) activeConfig.openaiApiKey = localKey;
+    if (hasOpenAiKey && !activeConfig.openaiApiKey) {
+      try {
+        const sr = await dashboardFetch('/api/admin/secrets');
+        if (sr.ok) {
+          const secrets = await sr.json();
+          if (secrets.openaiApiKey) {
+            activeConfig.openaiApiKey = secrets.openaiApiKey;
+            await chrome.storage.local.set({ openaiApiKey: secrets.openaiApiKey });
+          }
+        }
+      } catch (e) {}
+    }
 
     await chrome.storage.local.set({ config: activeConfig });
     configSource = 'dashboard';
@@ -1169,7 +1216,7 @@ async function syncBidOutcomes(force = false) {
 
   if (changed) {
     await persistQueueState();
-    fetch(`${getDashboardUrl()}/api/bids/outcomes`, {
+    dashboardFetch('/api/bids/outcomes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -1218,11 +1265,11 @@ async function resolveOpenAiKey() {
 
   if (!apiKey || apiKey.trim() === '') {
     try {
-      const res = await fetch(`${getDashboardUrl()}/api/config`);
+      const res = await dashboardFetch('/api/admin/secrets');
       if (res.ok) {
-        const remoteConfig = await res.json();
-        if (remoteConfig.openaiApiKey) {
-          apiKey = remoteConfig.openaiApiKey;
+        const secrets = await res.json();
+        if (secrets.openaiApiKey) {
+          apiKey = secrets.openaiApiKey;
           activeConfig.openaiApiKey = apiKey;
           await chrome.storage.local.set({ openaiApiKey: apiKey });
         }
@@ -1349,7 +1396,7 @@ async function submitFreelancerBid(project, amount, proposal) {
  */
 async function recordProjectResult(project) {
   try {
-    await fetch(`${getDashboardUrl()}/api/projects`, {
+    await dashboardFetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(project),

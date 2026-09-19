@@ -9,6 +9,7 @@ import {
   evaluateProject as sharedEvaluateProject,
 } from '../../extension/qualification.js';
 import { checkRelevance } from '../../extension/relevance.js';
+import { getOpenAiKey, setSecret, hasSecret } from './auth.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
@@ -93,10 +94,6 @@ class ProjectStore {
           loadedConfig.allowedCurrencies.push('INR', 'SGD', 'NZD', 'PHP');
         }
 
-        // Render / Cloud Environment Variable Overrides
-        if (process.env.OPENAI_API_KEY && !loadedConfig.openaiApiKey) {
-          loadedConfig.openaiApiKey = process.env.OPENAI_API_KEY;
-        }
         if (process.env.AUTOBID_CONFIG_JSON) {
           try {
             const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
@@ -105,6 +102,13 @@ class ProjectStore {
             }
           } catch (e) {}
         }
+
+        // The key used to live in plain text inside config. Move it into the encrypted
+        // secret store once, then keep config free of it.
+        if (loadedConfig.openaiApiKey && !hasSecret('openaiApiKey')) {
+          setSecret('openaiApiKey', String(loadedConfig.openaiApiKey).trim());
+        }
+        loadedConfig.openaiApiKey = '';
 
         return {
           config: loadedConfig,
@@ -121,9 +125,6 @@ class ProjectStore {
     }
 
     let defaultCfg = { ...DEFAULT_CONFIG };
-    if (process.env.OPENAI_API_KEY) {
-      defaultCfg.openaiApiKey = process.env.OPENAI_API_KEY;
-    }
     if (process.env.AUTOBID_CONFIG_JSON) {
       try {
         const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
@@ -176,7 +177,12 @@ class ProjectStore {
   }
 
   public updateConfig(newConfig: Partial<FilterConfig>): FilterConfig {
-    this.state.config = { ...this.state.config, ...newConfig };
+    const { openaiApiKey, ...rest } = newConfig;
+    // A key sent through the settings form goes to the encrypted store, never into config.
+    if (typeof openaiApiKey === 'string' && openaiApiKey.trim() && !openaiApiKey.includes('…')) {
+      setSecret('openaiApiKey', openaiApiKey.trim());
+    }
+    this.state.config = { ...this.state.config, ...rest, openaiApiKey: '' };
     this.persist();
     return this.state.config;
   }
@@ -693,7 +699,7 @@ class ProjectStore {
 
     // AI relevance gate: only projects that cleared the exact filters reach the model.
     if (config.aiRelevanceEnabled !== false) {
-      const apiKey = (config.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
+      const apiKey = getOpenAiKey();
       try {
         const verdict = await checkRelevance(project, { ...config, openaiApiKey: apiKey });
         project.relevance = {
@@ -753,7 +759,7 @@ class ProjectStore {
           portfolioLinks: config.portfolioLinks,
           ctaQuestion: config.ctaQuestion,
           customSystemPrompt: config.systemPrompt,
-          customApiKey: config.openaiApiKey,
+          customApiKey: getOpenAiKey(),
           model: chosenModel,
           useAiPricingAndDays: config.useAiPricingAndDays !== false,
         });
@@ -844,7 +850,7 @@ class ProjectStore {
       portfolioLinks: config.portfolioLinks,
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: config.systemPrompt,
-      customApiKey: config.openaiApiKey,
+      customApiKey: getOpenAiKey(),
       model: chosenModel,
       useAiPricingAndDays: config.useAiPricingAndDays !== false,
     });

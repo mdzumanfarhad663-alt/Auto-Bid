@@ -8,12 +8,164 @@ import { projectStore, getExtensionVersion } from './src/services/store.ts';
 import { generateProposal } from './src/services/openai.ts';
 import { runPollCycle, startBackgroundPoller, fetchFreelancerActiveProjects } from './src/services/freelancer-poller.ts';
 import { checkRelevance } from './extension/relevance.js';
+import {
+  isPasswordConfigured,
+  checkPassword,
+  setPassword,
+  issueSessionCookie,
+  verifySessionCookie,
+  parseCookies,
+  SESSION_COOKIE_NAME,
+  generateExtensionToken,
+  revokeExtensionToken,
+  verifyExtensionToken,
+  extensionTokenStatus,
+  getOpenAiKey,
+  setSecret,
+  maskSecret,
+  loginAllowed,
+  recordLoginFailure,
+  clearLoginFailures,
+} from './src/services/auth.ts';
 
 const app = express();
 const PORT = 3000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
-app.use(cors());
+// The extension is the only cross-origin caller and it authenticates with a bearer token,
+// so the browser never needs credentialed CORS. Cookies stay same-origin.
+app.use(cors({ origin: false }));
 app.use(express.json({ limit: '10mb' }));
+
+// -------------------------------------------------------------
+// AUTH
+// -------------------------------------------------------------
+
+function clientIp(req: express.Request): string {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+}
+
+function bearerToken(req: express.Request): string | undefined {
+  const h = req.headers.authorization || '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : undefined;
+}
+
+function hasSession(req: express.Request): boolean {
+  return verifySessionCookie(parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME]);
+}
+
+function hasExtensionToken(req: express.Request): boolean {
+  return verifyExtensionToken(bearerToken(req));
+}
+
+const PUBLIC_API = new Set(['/api/health', '/api/auth/login', '/api/auth/me']);
+
+// Every /api route needs the admin session or the extension token. Admin-only routes
+// additionally reject the extension token further down.
+app.use('/api', (req, res, next) => {
+  if (PUBLIC_API.has(req.path === '/' ? '/api' : `/api${req.path}`)) return next();
+  if (hasSession(req) || hasExtensionToken(req)) return next();
+  res.status(401).json({ error: 'Authentication required' });
+});
+
+function adminOnly(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (hasSession(req)) return next();
+  res.status(403).json({ error: 'Admin session required' });
+}
+
+function setSessionCookie(res: express.Response) {
+  const c = issueSessionCookie();
+  res.setHeader(
+    'Set-Cookie',
+    `${c.name}=${c.value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(c.maxAgeMs / 1000)}${IS_PROD ? '; Secure' : ''}`
+  );
+}
+
+app.post('/api/auth/login', (req, res) => {
+  if (!isPasswordConfigured()) {
+    return res.status(503).json({ error: 'No admin password configured. Set ADMIN_PASSWORD in the server environment.' });
+  }
+  const ip = clientIp(req);
+  const gate = loginAllowed(ip);
+  if (!gate.allowed) {
+    return res.status(429).json({ error: `Too many attempts. Try again in ${gate.retryAfterSeconds}s.` });
+  }
+  const { password } = req.body || {};
+  if (!checkPassword(password)) {
+    recordLoginFailure(ip);
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  clearLoginFailures(ip);
+  setSessionCookie(res);
+  res.json({ success: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${IS_PROD ? '; Secure' : ''}`);
+  res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  res.json({ authenticated: hasSession(req), passwordConfigured: isPasswordConfigured() });
+});
+
+app.post('/api/auth/change-password', adminOnly, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!checkPassword(currentPassword)) return res.status(401).json({ error: 'Current password is incorrect' });
+  if (typeof newPassword !== 'string' || newPassword.length < 10) {
+    return res.status(400).json({ error: 'New password must be at least 10 characters' });
+  }
+  setPassword(newPassword);
+  setSessionCookie(res);
+  res.json({
+    success: true,
+    note: 'Saved on this server. On Render the disk is ephemeral: also update ADMIN_PASSWORD in the environment so it survives a redeploy.',
+  });
+});
+
+// -------------------------------------------------------------
+// ADMIN: secrets and extension token
+// -------------------------------------------------------------
+
+app.get('/api/admin/status', adminOnly, (req, res) => {
+  const key = getOpenAiKey();
+  res.json({
+    openaiKey: { configured: !!key, masked: maskSecret(key), source: key && !process.env.OPENAI_API_KEY ? 'encrypted store' : key ? 'environment' : null },
+    extensionToken: extensionTokenStatus(),
+    sessionSecretFromEnv: !!(process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 16),
+    passwordFromEnv: !!process.env.ADMIN_PASSWORD,
+  });
+});
+
+app.post('/api/admin/openai-key', adminOnly, async (req, res) => {
+  const key = String(req.body?.apiKey || '').trim();
+  if (!key) {
+    setSecret('openaiApiKey', '');
+    return res.json({ success: true, cleared: true });
+  }
+  const probe = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${key}` } }).catch(() => null);
+  if (!probe || !probe.ok) {
+    return res.status(400).json({ error: `OpenAI rejected that key (HTTP ${probe ? probe.status : 'network error'})` });
+  }
+  setSecret('openaiApiKey', key);
+  res.json({ success: true, masked: maskSecret(key) });
+});
+
+app.post('/api/admin/extension-token', adminOnly, (req, res) => {
+  const token = generateExtensionToken();
+  res.json({ success: true, token, note: 'Shown once. Paste it into the extension popup.' });
+});
+
+app.delete('/api/admin/extension-token', adminOnly, (req, res) => {
+  revokeExtensionToken();
+  res.json({ success: true });
+});
+
+// The extension needs the real key to call OpenAI itself. Token holders only.
+app.get('/api/admin/secrets', (req, res) => {
+  if (!hasExtensionToken(req)) return res.status(403).json({ error: 'Extension token required' });
+  res.json({ openaiApiKey: getOpenAiKey() });
+});
 
 // -------------------------------------------------------------
 // REST API ENDPOINTS
@@ -51,9 +203,10 @@ app.get('/api/extension-version', (req, res) => {
   res.json({ version: getExtensionVersion() });
 });
 
-// Config endpoints
+// Config endpoints. The key never rides along; hasOpenAiKey says whether one exists.
 app.get('/api/config', (req, res) => {
-  res.json(projectStore.getConfig());
+  const key = getOpenAiKey();
+  res.json({ ...projectStore.getConfig(), openaiApiKey: maskSecret(key), hasOpenAiKey: !!key });
 });
 
 app.post('/api/config', (req, res) => {
@@ -226,7 +379,7 @@ app.post('/api/relevance-check', async (req, res) => {
       ...config,
       relevancePrompt: typeof relevancePrompt === 'string' ? relevancePrompt : config.relevancePrompt,
       relevanceMinScore: typeof relevanceMinScore === 'number' ? relevanceMinScore : config.relevanceMinScore,
-      openaiApiKey: config.openaiApiKey || process.env.OPENAI_API_KEY || '',
+      openaiApiKey: getOpenAiKey(),
     });
     res.json({ success: true, projectId: target.id, title: target.title, ...verdict });
   } catch (err: any) {
@@ -254,7 +407,7 @@ app.post('/api/generate-bid', async (req, res) => {
       portfolioLinks: config.portfolioLinks,
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: customPrompt || config.systemPrompt,
-      customApiKey: customApiKey || config.openaiApiKey,
+      customApiKey: customApiKey || getOpenAiKey(),
       model: model || config.customOpenAiModel?.trim() || config.openaiModel,
       useAiPricingAndDays: config.useAiPricingAndDays !== false,
     });
@@ -317,7 +470,12 @@ app.use('/extension', express.static(path.join(process.cwd(), 'extension')));
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // data/ holds the store and auth state, written every poll. Vite would otherwise
+        // treat those JSON writes as source changes and full-reload the dashboard.
+        watch: { ignored: ['**/data/**'] },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

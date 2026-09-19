@@ -98,6 +98,15 @@
     <div id="dashboardStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Filters, prompts, bidding rules and your OpenAI key are all set on the dashboard.</div>
   </div>
 
+  <div class="api-card">
+    <label for="tokenInput">🔐 Extension token</label>
+    <div style="display: flex; gap: 6px;">
+      <input type="password" id="tokenInput" class="text-input" placeholder="fab_…  from Dashboard → Admin" autocomplete="off" />
+      <button id="saveTokenBtn" class="btn btn-secondary" style="flex: 0 0 60px; padding: 4px 8px; font-size: 11px;">Save</button>
+    </div>
+    <div id="tokenStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Generate on the dashboard Admin page. Required for the dashboard to accept this extension.</div>
+  </div>
+
   <div class="btn-group">
     <button id="pollNowBtn" class="btn btn-secondary">⚡ Poll Now</button>
     <a id="openDashboardLink" href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Dashboard</a>

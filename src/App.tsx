@@ -19,6 +19,8 @@ import { BiddingProfilesPage } from './pages/BiddingProfilesPage.tsx';
 import { NdaIpSigningPage } from './pages/NdaIpSigningPage.tsx';
 import { CodeExportPage } from './pages/CodeExportPage.tsx';
 import { SetupGuidePage } from './pages/SetupGuidePage.tsx';
+import { AdminPage } from './pages/AdminPage.tsx';
+import { LoginPage } from './pages/LoginPage.tsx';
 import { FilterConfig, FreelancerProject, DEFAULT_CONFIG } from './types.ts';
 
 export default function App() {
@@ -38,6 +40,20 @@ export default function App() {
 
   const [isPolling, setIsPolling] = useState(false);
   const [pollCountdown, setPollCountdown] = useState<number>(30);
+
+  // null = unknown (checking), false = show login, true = signed in
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [passwordConfigured, setPasswordConfigured] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        setAuthed(!!d.authenticated);
+        setPasswordConfigured(d.passwordConfigured !== false);
+      })
+      .catch(() => setAuthed(false));
+  }, []);
 
   // Synthesized Web Audio chime on qualified new project
   const playAlertChime = useCallback(() => {
@@ -192,6 +208,13 @@ export default function App() {
     }
   };
 
+  if (authed === null) {
+    return <div className="min-h-screen bg-slate-950" />;
+  }
+  if (!authed) {
+    return <LoginPage passwordConfigured={passwordConfigured} onAuthenticated={() => { setAuthed(true); fetchData(); }} />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -221,6 +244,7 @@ export default function App() {
           <Route path="/nda-ip-signing" element={<NdaIpSigningPage />} />
           <Route path="/code" element={<CodeExportPage />} />
           <Route path="/guide" element={<SetupGuidePage />} />
+          <Route path="/admin" element={<AdminPage />} />
           {/* Catch-all fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>

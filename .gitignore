@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Admin password hash, extension token hash and encrypted secrets. Never commit.
+data/auth.json
