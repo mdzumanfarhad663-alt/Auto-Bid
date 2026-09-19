@@ -13,6 +13,8 @@
  * 6. OpenAI proposal generation adhering to strict custom markdown rules.
  */
 
+import { buildActiveFeedUrl, mapActiveProject, evaluateProject } from './qualification.js';
+
 const LOCAL_DASHBOARD_URL = 'http://localhost:3000';
 
 // The dashboard can be hosted anywhere (Render, a VPS, localhost). The extension reads its
@@ -47,15 +49,23 @@ const DEFAULT_CONFIG = {
   openaiModel: 'gpt-4o-mini',
   mandatorySkills: ['WordPress', 'Shopify', 'PHP', 'HTML', 'CSS', 'JavaScript', 'React', 'Node.js', 'Next.js', 'Python', 'SEO', 'Data Entry', 'Web Development', 'Full Stack Development'],
   minMatchingSkills: 1,
+  blockedSkills: [],
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
   blockedCountries: [],
   allowedLanguages: ['English', 'ALL'],
   blockedCategories: ['Adult Content', 'Academic Writing', 'Illegal Activities'],
+  allowedListingTypes: ['featured', 'sealed', 'nda', 'urgent', 'recruiter', 'ipContract', 'premium', 'enterprise', 'pfOnly', 'nonCompete'],
+  maxProjectAgeHours: 0,
+  maxExistingBids: 0,
   minBudget: 15,
   maxBudget: 5000,
+  minBudgetHourly: 0,
+  maxBudgetHourly: 0,
   allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
   requirePaymentVerified: false,
-  minClientRating: 4.0,
+  requiredClientVerifications: [],
+  minClientRating: 0,
+  minClientCategoryRatings: {},
   minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
@@ -917,15 +927,18 @@ async function fetchFromFreelancerRssFeed() {
           currency,
         },
         jobs: categories.map((cat, idx) => ({ id: idx + 1, name: cat })),
+        // RSS carries no client data. Flagged so client-based filters skip rather than
+        // judging invented values.
         client: {
-          id: Math.floor(Math.random() * 900000) + 100000,
-          username: 'freelance_employer',
-          rating: 4.8,
-          reviewsCount: 6,
-          paymentVerified: true,
-          identityVerified: true,
-          country: 'United States',
+          id: 0,
+          username: 'freelancer_client',
+          rating: 0,
+          reviewsCount: 0,
+          paymentVerified: false,
+          identityVerified: false,
+          country: 'Unknown',
         },
+        clientDataAvailable: false,
         status: 'PENDING',
         url: link || `https://www.freelancer.com/projects/${id}`,
         feedSource: 'rss',
@@ -944,43 +957,13 @@ async function fetchFromFreelancerRssFeed() {
  */
 async function fetchFromFreelancerPublicApi() {
   try {
-    const url = 'https://www.freelancer.com/api/projects/0.1/projects/active/?limit=15&compact=true&job_details=true&user_details=true&user_country_details=true&sort_field=time_updated&reverse_sort=true';
-    const res = await fetch(url);
+    const res = await fetch(buildActiveFeedUrl(30));
     if (!res.ok) return [];
 
     const data = await res.json();
     if (!data.result || !data.result.projects) return [];
 
-    const rawList = data.result.projects;
-    const users = data.result.users || {};
-
-    return rawList.map((p) => {
-      const user = users[p.owner_id] || {};
-      return {
-        id: p.id,
-        title: p.title || 'Untitled Project',
-        description: p.preview_description || p.description || p.title,
-        submitDate: p.submitdate ? p.submitdate * 1000 : Date.now(),
-        budget: {
-          minimum: p.budget?.minimum || 50,
-          maximum: p.budget?.maximum || 250,
-          currency: p.currency?.code || 'USD',
-        },
-        jobs: (p.jobs || []).map((j) => ({ id: j.id, name: j.name })),
-        client: {
-          id: p.owner_id || 0,
-          username: user.username || 'client',
-          rating: user.reputation?.entire_history?.overall || 4.5,
-          reviewsCount: user.reputation?.entire_history?.reviews || 3,
-          paymentVerified: user.status?.payment_verified || false,
-          identityVerified: user.status?.identity_verified || false,
-          country: user.location?.country?.name || 'Unknown',
-        },
-        status: 'PENDING',
-        url: `https://www.freelancer.com/projects/${p.seo_url || p.id}`,
-        feedSource: 'public_api',
-      };
-    });
+    return data.result.projects.map(mapActiveProject);
   } catch (err) {
     console.error('[FreelancerAutoBid] Error querying Freelancer public API:', err);
     return [];
@@ -990,111 +973,76 @@ async function fetchFromFreelancerPublicApi() {
 /**
  * Fetch active projects from best available public feed
  */
+// The logged-in Freelancer user, resolved once per worker lifetime. Null when the browser
+// has no Freelancer session, in which case the already-bid check is left to the page.
+let myFreelancerUserId = undefined;
+
+async function getMyFreelancerUserId() {
+  if (myFreelancerUserId !== undefined) return myFreelancerUserId;
+  try {
+    const res = await fetch('https://www.freelancer.com/api/users/0.1/self?compact=true&new_errors=true', {
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    myFreelancerUserId = data.result && data.result.id ? data.result.id : null;
+  } catch (e) {
+    myFreelancerUserId = null;
+  }
+  if (!myFreelancerUserId) console.log('[FreelancerAutoBid] No Freelancer session in this browser; already-bid check deferred to the project page.');
+  return myFreelancerUserId;
+}
+
+/**
+ * Mark projects this account has already bid on. One request for the whole batch.
+ */
+async function markAlreadyBid(projects) {
+  const me = await getMyFreelancerUserId();
+  if (!me || !projects.length) return projects;
+
+  try {
+    const params = new URLSearchParams({ compact: 'true', new_errors: 'true' });
+    params.append('bidders[]', String(me));
+    for (const p of projects) params.append('projects[]', String(p.id));
+
+    const res = await fetch(`https://www.freelancer.com/api/projects/0.1/bids?${params.toString()}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return projects;
+
+    const data = await res.json();
+    const bidOn = new Set((data.result && data.result.bids ? data.result.bids : []).map((b) => b.project_id));
+    for (const p of projects) {
+      if (bidOn.has(p.id)) p.alreadyBid = true;
+    }
+  } catch (e) {
+    console.log('[FreelancerAutoBid] Already-bid lookup failed:', e.message);
+  }
+  return projects;
+}
+
 async function fetchActiveFreelancerProjects() {
   const source = activeConfig.feedSource || 'auto';
+  let projects;
 
   if (source === 'rss') {
-    return await fetchFromFreelancerRssFeed();
+    projects = await fetchFromFreelancerRssFeed();
+  } else {
+    // API first: it is the only source that carries client data.
+    projects = await fetchFromFreelancerPublicApi();
+    if (!projects || projects.length === 0) {
+      projects = await fetchFromFreelancerRssFeed();
+    }
   }
 
-  if (source === 'public_api') {
-    const apiProjects = await fetchFromFreelancerPublicApi();
-    if (apiProjects.length > 0) return apiProjects;
-    return await fetchFromFreelancerRssFeed();
-  }
-
-  // Auto mode: query public API first, fallback to RSS
-  const apiProjects = await fetchFromFreelancerPublicApi();
-  if (apiProjects && apiProjects.length > 0) {
-    return apiProjects;
-  }
-  return await fetchFromFreelancerRssFeed();
+  return markAlreadyBid(projects || []);
 }
 
 /**
  * Real-time filter & qualification evaluation engine
  */
 function evaluateQualification(project, config) {
-  const jobNames = (project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '').toLowerCase());
-  const fullText = `${project.title} ${project.description}`.toLowerCase();
-
-  // 1. Blocked Countries Check
-  if (config.blockedCountries && config.blockedCountries.length > 0) {
-    const clientCountry = (project.client.country || '').trim().toLowerCase();
-    const isBlocked = config.blockedCountries.some((c) => {
-      const cLower = c.trim().toLowerCase();
-      return cLower && (clientCountry === cLower || clientCountry.includes(cLower));
-    });
-    if (isBlocked) {
-      return { qualified: false, reason: `Disqualified: Blocked client country (${project.client.country})` };
-    }
-  }
-
-  // 2. Blocked Categories Check
-  if (config.blockedCategories && config.blockedCategories.length > 0) {
-    const matchedBlockedCategory = config.blockedCategories.find((cat) => {
-      const catLower = cat.trim().toLowerCase();
-      return catLower && (jobNames.some((j) => j.includes(catLower)) || fullText.includes(catLower));
-    });
-    if (matchedBlockedCategory) {
-      return { qualified: false, reason: `Discarded: Blocked category match (${matchedBlockedCategory})` };
-    }
-  }
-
-  // 3. Mandatory Platform Check: Require explicit tech tags
-  const matchedTags = [];
-  if (config.mandatorySkills && config.mandatorySkills.length > 0) {
-    for (const skill of config.mandatorySkills) {
-      const sLower = skill.trim().toLowerCase();
-      if (!sLower) continue;
-      const matched = jobNames.some((j) => j === sLower || j.includes(sLower) || sLower.includes(j)) || fullText.includes(sLower);
-      if (matched) matchedTags.push(skill);
-    }
-
-    const minReq = Math.max(1, config.minMatchingSkills || 1);
-    if (matchedTags.length < minReq) {
-      return { qualified: false, reason: `Ineligible: Missing mandatory tech skills (Matched ${matchedTags.length}/${minReq})` };
-    }
-  }
-
-  // 4. Negative Keyword Blacklist
-  if (config.negativeKeywords && config.negativeKeywords.length > 0) {
-    const matchedBlacklist = config.negativeKeywords.filter((neg) => {
-      const nLower = neg.trim().toLowerCase();
-      return nLower && (fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower)));
-    });
-
-    if (matchedBlacklist.length > 0) {
-      return {
-        qualified: false,
-        reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
-        matchedBlacklist,
-      };
-    }
-  }
-
-  // 5. Budget & Client Qualification
-  if (project.budget.maximum > 0 && project.budget.maximum < config.minBudget) {
-    return { qualified: false, reason: `Budget below minimum ($${project.budget.maximum} < $${config.minBudget})` };
-  }
-
-  if (project.budget.minimum > config.maxBudget) {
-    return { qualified: false, reason: `Budget exceeds ceiling ($${project.budget.minimum} > $${config.maxBudget})` };
-  }
-
-  if (config.allowedCurrencies.length > 0 && !config.allowedCurrencies.includes('ALL') && !config.allowedCurrencies.includes(project.budget.currency)) {
-    return { qualified: false, reason: `Currency not permitted (${project.budget.currency})` };
-  }
-
-  if (config.requirePaymentVerified && !project.client.paymentVerified && project.feedSource !== 'rss') {
-    return { qualified: false, reason: 'Client payment is unverified' };
-  }
-
-  if (project.feedSource !== 'rss' && project.client.reviewsCount > 0 && project.client.rating < config.minClientRating) {
-    return { qualified: false, reason: `Client rating low (${project.client.rating.toFixed(1)} < ${config.minClientRating})` };
-  }
-
-  return { qualified: true, matchedTags };
+  return evaluateProject(project, config);
 }
 
 /**

@@ -1,22 +1,59 @@
+export type ClientVerificationKey =
+  | 'payment_verified'
+  | 'identity_verified'
+  | 'deposit_made'
+  | 'email_verified'
+  | 'profile_complete'
+  | 'phone_verified'
+  | 'custom_charge_verified'
+  | 'freelancer_verified_user';
+
+export type CategoryRatingKey = 'clarity_spec' | 'communication' | 'payment_prom' | 'professionalism' | 'hire_again';
+
+export type ListingTypeKey =
+  | 'featured'
+  | 'sealed'
+  | 'nda'
+  | 'urgent'
+  | 'recruiter'
+  | 'ipContract'
+  | 'premium'
+  | 'enterprise'
+  | 'pfOnly'
+  | 'nonCompete';
+
 export interface FreelancerProject {
   id: number;
   title: string;
   description: string;
   submitDate: number;
+  type?: 'fixed' | 'hourly';
+  bidPeriod?: number | null;
+  language?: string | null;
+  seoUrl?: string | null;
   budget: {
     minimum: number;
     maximum: number;
     currency: string;
   };
   jobs: Array<{ id: number; name: string }>;
+  bidCount?: number;
+  bidAvg?: number;
+  upgrades?: Record<ListingTypeKey | 'nonpublic', boolean>;
+  alreadyBid?: boolean;
+  clientDataAvailable?: boolean;
   client: {
     id: number;
     username: string;
     rating: number;
     reviewsCount: number;
+    completionRate?: number | null;
+    categoryRatings?: Record<CategoryRatingKey, number> | null;
+    verifications?: Record<ClientVerificationKey, boolean> | null;
     paymentVerified: boolean;
     identityVerified: boolean;
     country: string;
+    registrationDate?: number | null;
   };
   status: 'PENDING' | 'QUALIFIED' | 'SKIPPED' | 'BID_PLACED' | 'FAILED';
   skipReason?: string;
@@ -43,15 +80,23 @@ export interface FilterConfig {
   audioAlerts: boolean;
   mandatorySkills: string[];
   minMatchingSkills: number; // Minimum number of mandatory skills that must match (default 1)
+  blockedSkills: string[]; // A project carrying any of these skills is never bid on
   negativeKeywords: string[];
   blockedCountries: string[]; // Block projects from specific client countries (e.g. ['India', 'Pakistan'])
   allowedLanguages: string[]; // Allowed project languages (e.g. ['English', 'ALL'])
   blockedCategories: string[]; // Blacklisted project categories/jobs
-  minBudget: number;
+  allowedListingTypes: ListingTypeKey[]; // A project flagged with a type not in this list is skipped
+  maxProjectAgeHours: number; // 0 disables
+  maxExistingBids: number; // Skip once a project has this many bids; 0 ignores competition
+  minBudget: number; // Fixed-price range, USD; 0 disables
   maxBudget: number;
+  minBudgetHourly: number; // Hourly-rate range, USD per hour; 0 disables
+  maxBudgetHourly: number;
   allowedCurrencies: string[];
-  requirePaymentVerified: boolean;
+  requirePaymentVerified: boolean; // Legacy shorthand for requiredClientVerifications including payment_verified
+  requiredClientVerifications: ClientVerificationKey[]; // Client must have every one of these
   minClientRating: number;
+  minClientCategoryRatings: Partial<Record<CategoryRatingKey, number>>; // 0 or absent skips none
   minClientReviews: number;
   freelancerSkills: string[];
   portfolioLinks: string[];
@@ -114,15 +159,23 @@ export const DEFAULT_CONFIG: FilterConfig = {
     'Data Entry'
   ],
   minMatchingSkills: 1,
+  blockedSkills: [],
   negativeKeywords: ['Casino', 'Betting', 'Academic', 'Essay', 'Adult', 'Crypto Trading Bot'],
   blockedCountries: [],
   allowedLanguages: ['English', 'ALL'],
   blockedCategories: ['Adult Content', 'Academic Writing', 'Illegal Activities'],
+  allowedListingTypes: ['featured', 'sealed', 'nda', 'urgent', 'recruiter', 'ipContract', 'premium', 'enterprise', 'pfOnly', 'nonCompete'],
+  maxProjectAgeHours: 0,
+  maxExistingBids: 0,
   minBudget: 15,
   maxBudget: 5000,
+  minBudgetHourly: 0,
+  maxBudgetHourly: 0,
   allowedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'INR', 'SGD', 'NZD', 'PHP', 'ALL'],
-  requirePaymentVerified: false, // Default false so public live feeds are not blocked
-  minClientRating: 4.0,
+  requirePaymentVerified: false, // Most clients never verify; requiring it skips the majority of projects
+  requiredClientVerifications: [],
+  minClientRating: 0,
+  minClientCategoryRatings: {},
   minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'PHP', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],

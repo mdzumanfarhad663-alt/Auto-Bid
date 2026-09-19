@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { FilterConfig, DEFAULT_CONFIG } from '../types.ts';
+import { FilterConfig, DEFAULT_CONFIG, ClientVerificationKey, CategoryRatingKey, ListingTypeKey } from '../types.ts';
+import {
+  CLIENT_VERIFICATION_KEYS,
+  CLIENT_VERIFICATION_LABELS,
+  CATEGORY_RATING_KEYS,
+  CATEGORY_RATING_LABELS,
+  LISTING_TYPE_KEYS,
+  LISTING_TYPE_LABELS,
+} from '../../extension/qualification.js';
 import { 
   Settings, 
   Save, 
@@ -1174,50 +1182,190 @@ Are you currently using any caching plugin or CDN on the site?`}
             </form>
           </div>
 
-          {/* Client Qualification */}
-          <div className="pt-2 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Never-bid-on skills */}
+          <div className="pt-2 border-t border-slate-800 space-y-2">
+            <label className="text-xs font-semibold text-slate-300 block">
+              Never Bid On Skills
+            </label>
+            <p className="text-[11px] text-slate-500">
+              A project carrying any of these skills is skipped. Comma separated.
+            </p>
+            <input
+              type="text"
+              value={(formData.blockedSkills || []).join(', ')}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  blockedSkills: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                })
+              }
+              placeholder="e.g. Mobile App Development, Video Editing"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none"
+            />
+          </div>
+
+          {/* Listings, age, competition, hourly budget */}
+          <div className="pt-2 border-t border-slate-800 space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Require Verified Payment
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
+                Listing Types Allowed
               </label>
-              <select
-                value={formData.requirePaymentVerified ? 'yes' : 'no'}
-                onChange={(e) => setFormData({ ...formData, requirePaymentVerified: e.target.value === 'yes' })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              >
-                <option value="no">No (Accept public feed &amp; newly joined)</option>
-                <option value="yes">Yes (Strict: Payment Verified Only)</option>
-              </select>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {(LISTING_TYPE_KEYS as ListingTypeKey[]).map((key) => {
+                  const allowed = (formData.allowedListingTypes || []).includes(key);
+                  return (
+                    <label key={key} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allowed}
+                        onChange={(e) => {
+                          const current = new Set(formData.allowedListingTypes || []);
+                          if (e.target.checked) current.add(key);
+                          else current.delete(key);
+                          setFormData({ ...formData, allowedListingTypes: Array.from(current) as ListingTypeKey[] });
+                        }}
+                        className="accent-blue-500"
+                      />
+                      {(LISTING_TYPE_LABELS as Record<string, string>)[key]}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                A project flagged with an unticked type is skipped. Untick NDA or IP Agreement if you do not want to sign them.
+              </p>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Max Project Age (hours)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.maxProjectAgeHours ?? 0}
+                  onChange={(e) => setFormData({ ...formData, maxProjectAgeHours: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">0 disables.</p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Skip If Existing Bids Reach</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.maxExistingBids ?? 0}
+                  onChange={(e) => setFormData({ ...formData, maxExistingBids: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">0 ignores competition.</p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Min Hourly Rate (USD)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.minBudgetHourly ?? 0}
+                  onChange={(e) => setFormData({ ...formData, minBudgetHourly: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Max Hourly Rate (USD)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.maxBudgetHourly ?? 0}
+                  onChange={(e) => setFormData({ ...formData, maxBudgetHourly: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Fixed-price range is set above. 0 disables.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Client Verification */}
+          <div className="pt-2 border-t border-slate-800 space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Minimum Client Rating
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="5.0"
-                value={formData.minClientRating}
-                onChange={(e) => setFormData({ ...formData, minClientRating: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              />
+              <label className="text-xs font-semibold text-slate-300 block">Required Client Verifications</label>
+              <p className="text-[11px] text-amber-400/90 mt-1">
+                Use with caution: most clients never complete these. Each one you require skips every project whose client lacks it.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(CLIENT_VERIFICATION_KEYS as ClientVerificationKey[]).map((key) => {
+                const required = (formData.requiredClientVerifications || []).includes(key)
+                  || (key === 'payment_verified' && !!formData.requirePaymentVerified);
+                return (
+                  <label key={key} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={required}
+                      onChange={(e) => {
+                        const current = new Set(formData.requiredClientVerifications || []);
+                        if (e.target.checked) current.add(key);
+                        else current.delete(key);
+                        setFormData({
+                          ...formData,
+                          requiredClientVerifications: Array.from(current) as ClientVerificationKey[],
+                          requirePaymentVerified: current.has('payment_verified'),
+                        });
+                      }}
+                      className="accent-blue-500"
+                    />
+                    {(CLIENT_VERIFICATION_LABELS as Record<string, string>)[key]}
+                  </label>
+                );
+              })}
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Minimum Reviews Count
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.minClientReviews}
-                onChange={(e) => setFormData({ ...formData, minClientReviews: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Min Overall Rating</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={formData.minClientRating}
+                  onChange={(e) => setFormData({ ...formData, minClientRating: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Min Reviews</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.minClientReviews}
+                  onChange={(e) => setFormData({ ...formData, minClientReviews: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+              {(CATEGORY_RATING_KEYS as CategoryRatingKey[]).map((key) => (
+                <div key={key}>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">
+                    Min {(CATEGORY_RATING_LABELS as Record<string, string>)[key]}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="5"
+                    value={formData.minClientCategoryRatings?.[key] ?? 0}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        minClientCategoryRatings: { ...(formData.minClientCategoryRatings || {}), [key]: Number(e.target.value) },
+                      })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                  />
+                </div>
+              ))}
             </div>
+            <p className="text-[11px] text-slate-500">
+              Ratings only apply to clients with at least one review. 0 skips none.
+            </p>
           </div>
         </div>
       )}

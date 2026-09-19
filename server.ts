@@ -234,17 +234,9 @@ app.get('/api/download-extension-zip', async (req, res) => {
     const zip = new JSZip();
     const extDir = path.join(process.cwd(), 'extension');
 
-    const manifestContent = fs.readFileSync(path.join(extDir, 'manifest.json'), 'utf-8');
-    const backgroundContent = fs.readFileSync(path.join(extDir, 'background.js'), 'utf-8');
-    const contentJs = fs.readFileSync(path.join(extDir, 'content.js'), 'utf-8');
-    const popupHtml = fs.readFileSync(path.join(extDir, 'popup.html'), 'utf-8');
-    const popupJs = fs.readFileSync(path.join(extDir, 'popup.js'), 'utf-8');
-
-    zip.file('manifest.json', manifestContent);
-    zip.file('background.js', backgroundContent);
-    zip.file('content.js', contentJs);
-    zip.file('popup.html', popupHtml);
-    zip.file('popup.js', popupJs);
+    for (const file of ['manifest.json', 'background.js', 'qualification.js', 'content.js', 'popup.html', 'popup.js']) {
+      zip.file(file, fs.readFileSync(path.join(extDir, file), 'utf-8'));
+    }
 
     const iconsFolder = zip.folder('icons');
     const iconsDir = path.join(extDir, 'icons');

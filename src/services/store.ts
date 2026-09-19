@@ -3,6 +3,11 @@ import path from 'path';
 import { FreelancerProject, FilterConfig, BidLog, SystemStats, DashboardData, DEFAULT_CONFIG } from '../types.ts';
 import { generateProposal } from './openai.ts';
 import { normalizeBidAmount } from './pricing.ts';
+import {
+  CURRENCY_RATES_TO_USD as SHARED_RATES,
+  convertToUSD as sharedConvertToUSD,
+  evaluateProject as sharedEvaluateProject,
+} from '../../extension/qualification.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
@@ -18,24 +23,10 @@ export function getExtensionVersion(): string {
 
 export { DEFAULT_CONFIG };
 
-export const CURRENCY_RATES_TO_USD: Record<string, number> = {
-  USD: 1.0,
-  EUR: 1.08,
-  GBP: 1.30,
-  AUD: 0.66,
-  CAD: 0.74,
-  NZD: 0.61,
-  SGD: 0.76,
-  INR: 0.012,
-  PHP: 0.018,
-  BRL: 0.18,
-  JPY: 0.0068,
-};
+export const CURRENCY_RATES_TO_USD: Record<string, number> = SHARED_RATES;
 
 export function convertToUSD(amount: number, currency: string): number {
-  const curr = (currency || 'USD').toUpperCase();
-  const rate = CURRENCY_RATES_TO_USD[curr] || 1.0;
-  return amount * rate;
+  return sharedConvertToUSD(amount, currency);
 }
 
 interface StoreState {
@@ -531,38 +522,8 @@ class ProjectStore {
   }
 
   /**
-   * Helper to perform safe word-boundary or exact skill matching
-   */
-  private matchSkill(skill: string, jobNames: string[], fullText: string): boolean {
-    const sLower = skill.trim().toLowerCase();
-    if (!sLower) return false;
-
-    // Direct match against job tag names (e.g. "React.js" matches "react.js" or "react")
-    for (const j of jobNames) {
-      if (j === sLower || j.includes(sLower) || sLower.includes(j)) {
-        return true;
-      }
-    }
-
-    // Word boundary match in full description/title text to avoid false positives (e.g. "C" vs "CSS")
-    try {
-      const escaped = sLower.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-      return regex.test(fullText);
-    } catch {
-      return fullText.includes(sLower);
-    }
-  }
-
-  /**
-   * Evaluates project against all qualification rules:
-   * 0. Deduplication (already in processed list)
-   * 1. Blocked Countries check
-   * 2. Blocked Project Categories check
-   * 3. Mandatory Tech Tags check (with precise matching and minimum count threshold)
-   * 4. Negative Keyword Blacklist check
-   * 5. Budget & Currency Normalization in USD
-   * 6. Client Rating, Reviews, and Payment Verification
+   * Qualification rules live in extension/qualification.js so the dashboard and the
+   * extension can never disagree about why a project was skipped.
    */
   public evaluateProject(project: FreelancerProject): {
     qualified: boolean;
@@ -570,142 +531,10 @@ class ProjectStore {
     matchedTags?: string[];
     matchedBlacklist?: string[];
   } {
-    const config = this.state.config;
-
-    // Rule 0: Deduplication check
     if (this.state.processedProjectIds.includes(project.id)) {
       return { qualified: false, reason: 'Already processed (Deduplication)' };
     }
-
-    const jobNames = (project.jobs || []).map((j) => (typeof j === 'string' ? j : j.name || '').toLowerCase());
-    const fullText = `${project.title || ''} ${project.description || ''}`.toLowerCase();
-
-    // Rule 1: Blocked Countries Check
-    if (config.blockedCountries && config.blockedCountries.length > 0 && project.client?.country) {
-      const clientCountry = project.client.country.trim().toLowerCase();
-      const isBlocked = config.blockedCountries.some((c) => {
-        const cLower = c.trim().toLowerCase();
-        return cLower && (clientCountry === cLower || clientCountry.includes(cLower));
-      });
-      if (isBlocked) {
-        return {
-          qualified: false,
-          reason: `Disqualified: Blocked client country (${project.client.country})`,
-        };
-      }
-    }
-
-    // Rule 2: Blocked Project Categories Check
-    if (config.blockedCategories && config.blockedCategories.length > 0) {
-      const matchedBlockedCategory = config.blockedCategories.find((cat) => {
-        const catLower = cat.trim().toLowerCase();
-        return catLower && (jobNames.some((j) => j.includes(catLower)) || fullText.includes(catLower));
-      });
-      if (matchedBlockedCategory) {
-        return {
-          qualified: false,
-          reason: `Discarded: Blocked project category (${matchedBlockedCategory})`,
-        };
-      }
-    }
-
-    // Rule 3: Mandatory Platform Tech Tags Check
-    const matchedTags: string[] = [];
-    if (config.mandatorySkills && config.mandatorySkills.length > 0) {
-      for (const skill of config.mandatorySkills) {
-        if (this.matchSkill(skill, jobNames, fullText)) {
-          matchedTags.push(skill);
-        }
-      }
-
-      const minReq = Math.max(1, config.minMatchingSkills || 1);
-      if (matchedTags.length < minReq) {
-        return {
-          qualified: false,
-          reason: `Ineligible: Missing mandatory tech skills (Matched ${matchedTags.length}/${minReq})`,
-        };
-      }
-    }
-
-    // Rule 4: Negative Keyword Blacklist
-    if (config.negativeKeywords && config.negativeKeywords.length > 0) {
-      const matchedBlacklist = config.negativeKeywords.filter((neg) => {
-        const nLower = neg.trim().toLowerCase();
-        if (!nLower) return false;
-        try {
-          const escaped = nLower.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-          return regex.test(fullText) || jobNames.some((j) => regex.test(j));
-        } catch {
-          return fullText.includes(nLower) || jobNames.some((j) => j.includes(nLower));
-        }
-      });
-
-      if (matchedBlacklist.length > 0) {
-        return {
-          qualified: false,
-          reason: `Discarded: Blacklisted keyword match (${matchedBlacklist.join(', ')})`,
-          matchedBlacklist,
-        };
-      }
-    }
-
-    // Rule 5: Budget & Currency Normalization in USD
-    const minInUSD = convertToUSD(project.budget.minimum, project.budget.currency);
-    const maxInUSD = convertToUSD(project.budget.maximum, project.budget.currency);
-
-    if (maxInUSD < config.minBudget) {
-      return {
-        qualified: false,
-        reason: `Budget too low (~$${Math.round(maxInUSD)} USD < min $${config.minBudget} USD)`,
-      };
-    }
-
-    if (minInUSD > config.maxBudget) {
-      return {
-        qualified: false,
-        reason: `Budget exceeds ceiling (~$${Math.round(minInUSD)} USD > max $${config.maxBudget} USD)`,
-      };
-    }
-
-    if (
-      config.allowedCurrencies &&
-      config.allowedCurrencies.length > 0 &&
-      !config.allowedCurrencies.includes('ALL') &&
-      !config.allowedCurrencies.includes(project.budget.currency)
-    ) {
-      return {
-        qualified: false,
-        reason: `Currency not permitted (${project.budget.currency})`,
-      };
-    }
-
-    // Rule 6: Client Trust & Verification
-    if (config.requirePaymentVerified && !project.client.paymentVerified && project.feedSource !== 'rss') {
-      return {
-        qualified: false,
-        reason: 'Client payment method is unverified',
-      };
-    }
-
-    if (project.feedSource !== 'rss' && project.client.reviewsCount > 0 && project.client.rating < config.minClientRating) {
-      return {
-        qualified: false,
-        reason: `Client rating below threshold (${project.client.rating.toFixed(1)} < ${config.minClientRating})`,
-      };
-    }
-
-    if (project.feedSource !== 'rss' && config.minClientReviews > 0 && (project.client.reviewsCount || 0) < config.minClientReviews) {
-      return {
-        qualified: false,
-        reason: `Client reviews below threshold (${project.client.reviewsCount} < ${config.minClientReviews})`,
-      };
-    }
-
-    return {
-      qualified: true,
-      matchedTags,
-    };
+    return sharedEvaluateProject(project, this.state.config);
   }
 
   /**
@@ -741,15 +570,15 @@ class ProjectStore {
 
       this.state.stats.totalSkipped += 1;
       const reason = evaluation.reason || '';
-      if (reason.includes('Missing mandatory platform')) {
+      if (reason.startsWith('Missing mandatory skills')) {
         this.state.stats.skipBreakdown.missingMandatoryTags += 1;
-      } else if (reason.includes('Blacklisted')) {
+      } else if (reason.startsWith('Excluded keyword')) {
         this.state.stats.skipBreakdown.blacklistedKeyword += 1;
-      } else if (reason.includes('Budget')) {
+      } else if (reason.startsWith('Below minimum') || reason.startsWith('Above maximum')) {
         this.state.stats.skipBreakdown.budgetOutOfRange += 1;
-      } else if (reason.includes('unverified')) {
+      } else if (reason.startsWith('Client not ')) {
         this.state.stats.skipBreakdown.unverifiedPayment += 1;
-      } else if (reason.includes('rating')) {
+      } else if (reason.startsWith('Client rating') || reason.startsWith('Client reviews') || /^Client \w+ below/.test(reason)) {
         this.state.stats.skipBreakdown.lowRating += 1;
       } else if (reason.includes('Already processed')) {
         this.state.stats.skipBreakdown.alreadyProcessed += 1;

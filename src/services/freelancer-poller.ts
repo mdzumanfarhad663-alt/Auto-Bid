@@ -6,6 +6,7 @@
 
 import { FreelancerProject } from '../types.ts';
 import { projectStore } from './store.ts';
+import { buildActiveFeedUrl, mapActiveProject } from '../../extension/qualification.js';
 
 const SAMPLE_PROJECT_TEMPLATES = [
   {
@@ -150,15 +151,18 @@ export async function fetchFromFreelancerRssFeed(): Promise<FreelancerProject[]>
           id: idx + 1,
           name,
         })),
+        // RSS carries no client data. Leave it empty and flag it, so client-based
+        // filters skip these instead of judging invented values.
         client: {
           id: 0,
           username: 'freelancer_client',
-          rating: 4.9,
-          reviewsCount: 5,
-          paymentVerified: true, // Allow RSS feed projects to pass initial filter
-          identityVerified: true,
-          country: 'Global',
+          rating: 0,
+          reviewsCount: 0,
+          paymentVerified: false,
+          identityVerified: false,
+          country: 'Unknown',
         },
+        clientDataAvailable: false,
         status: 'PENDING',
         url: link || `https://www.freelancer.com/projects/${id}`,
         feedSource: 'rss',
@@ -188,10 +192,7 @@ export async function fetchFromFreelancerPublicApi(): Promise<FreelancerProject[
       headers['freelancer-oauth-v1'] = token.trim();
     }
 
-    const response = await fetch(
-      'https://www.freelancer.com/api/projects/0.1/projects/active/?limit=20&compact=true&job_details=true&user_details=true',
-      { headers }
-    );
+    const response = await fetch(buildActiveFeedUrl(30), { headers });
 
     if (!response.ok) {
       console.warn(`[FreelancerPoller] Public API returned ${response.status}`);
@@ -200,35 +201,7 @@ export async function fetchFromFreelancerPublicApi(): Promise<FreelancerProject[
 
     const data = await response.json();
     const rawList = data.result?.projects || [];
-    const usersMap = data.result?.users || {};
-
-    return rawList.map((p: any) => {
-      const user = usersMap[p.owner_id] || {};
-      return {
-        id: p.id,
-        title: p.title || 'Untitled Project',
-        description: p.preview_description || p.description || p.title,
-        submitDate: (p.submitdate || Math.floor(Date.now() / 1000)) * 1000,
-        budget: {
-          minimum: p.budget?.minimum || 20,
-          maximum: p.budget?.maximum || 250,
-          currency: p.currency?.code || 'USD',
-        },
-        jobs: (p.jobs || []).map((j: any) => ({ id: j.id, name: j.name })),
-        client: {
-          id: p.owner_id || 0,
-          username: user.username || `client_${p.owner_id || 'feed'}`,
-          rating: user.reputation?.entire_history?.overall || 4.8,
-          reviewsCount: user.reputation?.entire_history?.reviews || 0,
-          paymentVerified: !!user.status?.payment_verified,
-          identityVerified: !!user.status?.identity_verified,
-          country: user.location?.country?.name || 'Global',
-        },
-        status: 'PENDING',
-        url: `https://www.freelancer.com/projects/${p.seo_url || p.id}`,
-        feedSource: 'public_api',
-      } as FreelancerProject;
-    });
+    return rawList.map((p: any) => mapActiveProject(p) as FreelancerProject);
   } catch (err) {
     console.warn('[FreelancerPoller] Error fetching from Freelancer Public API:', err);
     return [];
@@ -266,9 +239,9 @@ export async function fetchFreelancerActiveProjects(): Promise<FreelancerProject
       fetchFromFreelancerPublicApi().catch(() => []),
     ]);
 
-    // Merge by unique project ID
+    // Merge by unique project ID. API entries first: they carry client data, RSS does not.
     const projectMap = new Map<number, FreelancerProject>();
-    for (const p of [...rssProjects, ...apiProjects]) {
+    for (const p of [...apiProjects, ...rssProjects]) {
       if (!projectMap.has(p.id)) {
         projectMap.set(p.id, p);
       }
