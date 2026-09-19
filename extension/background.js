@@ -503,7 +503,30 @@ function handleMessage(message, sender, sendResponse) {
       activeConfig,
       processedCount: processedIds.size,
       isPolling,
+      lastPollAt,
+      lastPollSummary,
+      lastError,
+      queueLength: bidQueue.length,
+      activeBid: activeBid ? { projectId: activeBid.projectId, title: activeBid.title } : null,
+      configSource,
     });
+    return true;
+  }
+
+  // The master switch. Written to the dashboard as well, because the dashboard is the
+  // source of truth and would otherwise revert it on the next config sync.
+  if (message.type === 'SET_AUTOMATION_ENABLED') {
+    const enabled = message.enabled !== false;
+    activeConfig.autoBidEnabled = enabled;
+    chrome.storage.local.set({ config: activeConfig });
+    fetch(`${getDashboardUrl()}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoBidEnabled: enabled }),
+    })
+      .then((res) => sendResponse({ success: true, enabled, dashboardUpdated: res.ok }))
+      .catch(() => sendResponse({ success: true, enabled, dashboardUpdated: false }));
+    console.log(`[FreelancerAutoBid] Automation ${enabled ? 'enabled' : 'paused'} from popup.`);
     return true;
   }
 

@@ -8,169 +8,98 @@
     body { width: 340px; background: #0f172a; color: #f8fafc; padding: 16px; font-size: 13px; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 12px; }
     .brand { font-size: 15px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+    .version { font-size: 10px; color: #64748b; font-weight: 500; }
     .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 9999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
     .status-active { background: #064e3b; color: #34d399; border: 1px solid #059669; }
     .status-paused { background: #451a03; color: #fbbf24; border: 1px solid #d97706; }
-    
-    .feed-pill { background: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; border-radius: 6px; padding: 6px 10px; font-size: 11px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
-    .feed-pill span { font-weight: 600; }
 
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-    .stat-card { background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155; }
-    .stat-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
-    .stat-value { font-size: 18px; font-weight: 700; color: #f1f5f9; }
-
-    .toggle-row { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 9px 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #334155; }
-    .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .master { display: flex; justify-content: space-between; align-items: center; background: #1e1b4b; border: 1px solid #4f46e5; padding: 12px; border-radius: 10px; margin-bottom: 12px; }
+    .master-title { font-weight: 700; color: #c7d2fe; font-size: 14px; }
+    .master-sub { font-size: 11px; color: #a5b4fc; margin-top: 2px; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; transition: .3s; border-radius: 22px; }
-    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-    input:checked + .slider { background-color: #0ea5e9; }
-    input:checked + .slider:before { transform: translateX(18px); }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; transition: .3s; border-radius: 24px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #4f46e5; }
+    input:checked + .slider:before { transform: translateX(20px); }
 
-    .select-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+    .stat-card { background: #1e293b; padding: 8px 6px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+    .stat-label { font-size: 10px; color: #94a3b8; margin-bottom: 3px; }
+    .stat-value { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+
+    .activity { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 11px; color: #94a3b8; line-height: 1.5; }
+    .activity strong { color: #e2e8f0; }
+    .activity .warn { color: #fbbf24; }
+    .activity .err { color: #f87171; }
+
     .text-input { background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 6px 8px; font-size: 11px; outline: none; width: 100%; }
-
     .api-card { background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 8px; }
     .api-card label { font-size: 11px; font-weight: 600; color: #94a3b8; display: block; margin-bottom: 4px; }
 
-    .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+    .btn-group { display: flex; gap: 8px; margin-top: 8px; }
     .btn { flex: 1; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 12px; text-align: center; text-decoration: none; transition: background .15s; }
     .btn-primary { background: #0284c7; color: white; }
     .btn-primary:hover { background: #0369a1; }
     .btn-secondary { background: #334155; color: #e2e8f0; }
     .btn-secondary:hover { background: #475569; }
     .footer-note { margin-top: 10px; font-size: 11px; color: #64748b; text-align: center; }
+    .footer-note a { color: #38bdf8; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="brand">
       <span>⚡ FreelancerAutoBid</span>
+      <span id="versionLabel" class="version"></span>
     </div>
-    <div id="statusBadge" class="status-badge status-active">ACTIVE</div>
+    <div id="statusBadge" class="status-badge status-paused">PAUSED</div>
   </div>
 
-  <div class="feed-pill">
-    <span>📡 Freelancer Public Feed</span>
-    <span style="color: #38bdf8;">No OAuth Needed</span>
+  <!-- The one control that lives here. Everything else is configured on the dashboard. -->
+  <div class="master">
+    <div>
+      <div class="master-title">Automation</div>
+      <div id="masterSub" class="master-sub">Scanning and bidding are off</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="autoBidToggle">
+      <span class="slider"></span>
+    </label>
   </div>
 
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-label">Feed Projects</div>
+      <div class="stat-label">Bids today</div>
+      <div id="bidsCount" class="stat-value" style="color: #34d399;">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Scanned</div>
       <div id="scannedCount" class="stat-value">0</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Proposals Ready</div>
-      <div id="bidsCount" class="stat-value" style="color: #34d399;">0</div>
+      <div class="stat-label">Eligible</div>
+      <div id="eligibleCount" class="stat-value" style="color: #38bdf8;">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Queued</div>
+      <div id="queuedCount" class="stat-value" style="color: #a5b4fc;">0</div>
     </div>
   </div>
 
-  <!-- OpenAI API Key settings inside popup -->
-  <div class="api-card">
-    <label for="openaiKeyInput">🔑 OpenAI API Key (Required for AI Proposals)</label>
-    <div style="display: flex; gap: 6px;">
-      <input type="password" id="openaiKeyInput" class="text-input" placeholder="sk-proj-..." />
-      <button id="saveKeyBtn" class="btn btn-secondary" style="flex: 0 0 60px; padding: 4px 8px; font-size: 11px;">Save</button>
-    </div>
-    <div id="keyStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Strict Markdown Rules Active</div>
-  </div>
+  <div id="activity" class="activity">Waiting for the first poll…</div>
 
-  <!-- Where the dashboard is hosted, so the extension can read its config and key -->
   <div class="api-card">
     <label for="dashboardUrlInput">🌐 Dashboard URL</label>
     <div style="display: flex; gap: 6px;">
       <input type="text" id="dashboardUrlInput" class="text-input" placeholder="http://localhost:3000" />
       <button id="saveDashboardBtn" class="btn btn-secondary" style="flex: 0 0 60px; padding: 4px 8px; font-size: 11px;">Save</button>
     </div>
-    <div id="dashboardStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Set this to your hosted dashboard, e.g. https://your-app.onrender.com</div>
-  </div>
-
-  <div class="toggle-row" style="background: #1e1b4b; border-color: #4f46e5;">
-    <div>
-      <div style="font-weight: 700; color: #a5b4fc; display: flex; align-items: center; gap: 4px;">
-        <span>🤖 Hands-Free Auto-Bid</span>
-        <span style="font-size: 9px; background: #4338ca; color: #e0e7ff; padding: 1px 5px; border-radius: 4px;">AUTO-CLICK</span>
-      </div>
-      <div style="font-size: 11px; color: #c7d2fe;">Auto-clicks 'Place Bid' button (No human touch)</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="handsFreeToggle" checked>
-      <span class="slider" style="background-color: #4f46e5;"></span>
-    </label>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Auto-Submit Delay</div>
-      <div style="font-size: 11px; color: #94a3b8;">Review countdown before submit</div>
-    </div>
-    <select id="delaySelect" class="select-input">
-      <option value="0">Instant (0s)</option>
-      <option value="2" selected>2s Countdown</option>
-      <option value="3">3s Countdown</option>
-      <option value="5">5s Countdown</option>
-    </select>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Auto-Open Qualified</div>
-      <div style="font-size: 11px; color: #94a3b8;">Open tabs automatically as bids qualify</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="autoOpenToggle">
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Feed Poller</div>
-      <div style="font-size: 11px; color: #94a3b8;">Polls Freelancer public feed</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="autoBidToggle" checked>
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Poll Interval</div>
-      <div style="font-size: 11px; color: #94a3b8;">Frequency of feed scans</div>
-    </div>
-    <select id="intervalSelect" class="select-input">
-      <option value="30">Every 30s</option>
-      <option value="60">Every 1 min</option>
-    </select>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Desktop Notifications</div>
-      <div style="font-size: 11px; color: #94a3b8;">Popup alert on new projects</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="notifToggle" checked>
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="toggle-row">
-    <div>
-      <div style="font-weight: 600;">Dry-Run Simulation</div>
-      <div style="font-size: 11px; color: #94a3b8;">Review AI proposals safely</div>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="dryRunToggle" checked>
-      <span class="slider"></span>
-    </label>
+    <div id="dashboardStatus" style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Filters, prompts, bidding rules and your OpenAI key are all set on the dashboard.</div>
   </div>
 
   <div class="btn-group">
-    <button id="pollNowBtn" class="btn btn-secondary">⚡ Poll Feed Now</button>
+    <button id="pollNowBtn" class="btn btn-secondary">⚡ Poll Now</button>
     <a id="openDashboardLink" href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Dashboard</a>
   </div>
 
@@ -179,7 +108,7 @@
   </div>
 
   <div id="resetSeenStatus" class="footer-note">
-    Clears the seen list so current feed projects are evaluated again.
+    Re-evaluates projects already in the feed. Projects already bid on stay excluded.
   </div>
 
   <script src="popup.js"></script>
