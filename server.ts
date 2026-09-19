@@ -155,6 +155,21 @@ app.post('/api/validate-openai-key', async (req, res) => {
   }
 });
 
+// Extension syncs what Freelancer says became of submitted bids
+app.post('/api/bids/outcomes', (req, res) => {
+  const updates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+  const valid = updates.filter(
+    (u: any) => u && Number.isFinite(Number(u.projectId)) && ['pending', 'won', 'lost', 'closed', 'retracted'].includes(u.outcome)
+  );
+  const changed = projectStore.recordBidOutcomes(valid.map((u: any) => ({ ...u, projectId: Number(u.projectId) })));
+  res.json({ success: true, received: updates.length, applied: valid.length, changed });
+});
+
+// Win-rate by skill, budget band, project type, country, hour and relevance score
+app.get('/api/analytics/outcomes', (req, res) => {
+  res.json(projectStore.getOutcomeAnalytics());
+});
+
 // Bids logs
 app.get('/api/bids', (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 100;
@@ -256,7 +271,7 @@ app.get('/api/download-extension-zip', async (req, res) => {
     const zip = new JSZip();
     const extDir = path.join(process.cwd(), 'extension');
 
-    for (const file of ['manifest.json', 'background.js', 'qualification.js', 'relevance.js', 'content.js', 'popup.html', 'popup.js']) {
+    for (const file of ['manifest.json', 'background.js', 'qualification.js', 'relevance.js', 'outcomes.js', 'content.js', 'popup.html', 'popup.js']) {
       zip.file(file, fs.readFileSync(path.join(extDir, file), 'utf-8'));
     }
 

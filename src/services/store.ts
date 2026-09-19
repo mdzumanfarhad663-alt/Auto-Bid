@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { FreelancerProject, FilterConfig, BidLog, SystemStats, DashboardData, DEFAULT_CONFIG } from '../types.ts';
+import { FreelancerProject, FilterConfig, BidLog, BidOutcome, SystemStats, DashboardData, DEFAULT_CONFIG } from '../types.ts';
 import { generateProposal } from './openai.ts';
 import { normalizeBidAmount } from './pricing.ts';
 import {
@@ -202,6 +202,100 @@ class ProjectStore {
   }
 
   /**
+   * Freelancer's verdict on submitted bids, synced by the extension.
+   */
+  public recordBidOutcomes(
+    updates: Array<{ projectId: number; outcome: BidOutcome; paidStatus?: string | null; freelancerBidId?: number }>
+  ): number {
+    let changed = 0;
+    for (const u of updates) {
+      const log = this.state.bids.find((b) => b.projectId === u.projectId);
+      if (!log) continue;
+      if (log.outcome !== u.outcome || log.paidStatus !== (u.paidStatus || undefined)) changed += 1;
+      log.outcome = u.outcome;
+      log.outcomeCheckedAt = Date.now();
+      if (u.paidStatus) log.paidStatus = u.paidStatus;
+      if (u.freelancerBidId) log.freelancerBidId = u.freelancerBidId;
+    }
+    if (changed) this.persist();
+    return changed;
+  }
+
+  /**
+   * Win-rate broken down by the dimensions a user can actually tune.
+   */
+  public getOutcomeAnalytics() {
+    const bids = this.state.bids.filter((b) => b.status === 'SUCCESS');
+    const decided = bids.filter((b) => b.outcome === 'won' || b.outcome === 'lost');
+    const won = decided.filter((b) => b.outcome === 'won');
+
+    const byOutcome: Record<string, number> = {};
+    for (const b of bids) byOutcome[b.outcome || 'pending'] = (byOutcome[b.outcome || 'pending'] || 0) + 1;
+
+    const group = (keyOf: (b: BidLog) => string | null) => {
+      const acc: Record<string, { bids: number; won: number; lost: number }> = {};
+      for (const b of bids) {
+        const k = keyOf(b);
+        if (!k) continue;
+        acc[k] = acc[k] || { bids: 0, won: 0, lost: 0 };
+        acc[k].bids += 1;
+        if (b.outcome === 'won') acc[k].won += 1;
+        if (b.outcome === 'lost') acc[k].lost += 1;
+      }
+      return Object.entries(acc)
+        .map(([key, v]) => ({ key, ...v, winRate: v.won + v.lost ? v.won / (v.won + v.lost) : null }))
+        .sort((a, c) => c.bids - a.bids);
+    };
+
+    const project = (b: BidLog) => this.state.projects.find((p) => p.id === b.projectId);
+    const budgetBand = (b: BidLog) => {
+      const p = project(b);
+      const usd = p ? convertToUSD(p.budget.maximum, p.budget.currency) : b.bidAmount;
+      if (usd < 100) return '<$100';
+      if (usd < 500) return '$100-500';
+      if (usd < 2000) return '$500-2k';
+      return '$2k+';
+    };
+
+    return {
+      totalBids: bids.length,
+      decided: decided.length,
+      won: won.length,
+      lost: decided.length - won.length,
+      winRate: decided.length ? won.length / decided.length : null,
+      byOutcome,
+      bySkill: this.groupBySkill(bids),
+      byBudgetBand: group(budgetBand),
+      byProjectType: group((b) => b.projectType || project(b)?.type || null),
+      byCountry: group((b) => project(b)?.client?.country || null),
+      byHourOfDay: group((b) => String(new Date(b.timestamp).getHours()).padStart(2, '0') + ':00'),
+      byRelevanceScore: group((b) => {
+        const s = b.relevanceScore ?? project(b)?.relevance?.score;
+        if (s == null) return null;
+        return s >= 80 ? '80-100' : s >= 60 ? '60-79' : '<60';
+      }),
+    };
+  }
+
+  private groupBySkill(bids: BidLog[]) {
+    const acc: Record<string, { bids: number; won: number; lost: number }> = {};
+    for (const b of bids) {
+      const p = this.state.projects.find((x) => x.id === b.projectId);
+      const skills = b.skills || p?.jobs?.map((j) => j.name) || [];
+      for (const s of skills) {
+        acc[s] = acc[s] || { bids: 0, won: 0, lost: 0 };
+        acc[s].bids += 1;
+        if (b.outcome === 'won') acc[s].won += 1;
+        if (b.outcome === 'lost') acc[s].lost += 1;
+      }
+    }
+    return Object.entries(acc)
+      .map(([key, v]) => ({ key, ...v, winRate: v.won + v.lost ? v.won / (v.won + v.lost) : null }))
+      .sort((a, c) => c.bids - a.bids)
+      .slice(0, 25);
+  }
+
+  /**
    * The extension reports what happened in the tab. processProject never changes the
    * status of a project it has already stored, so without this a bid that failed on
    * Freelancer stays listed as ready forever.
@@ -233,6 +327,10 @@ class ProjectStore {
           proposal: project.generatedProposal || '',
           timestamp: Date.now(),
           status: 'SUCCESS',
+          outcome: 'pending',
+          skills: (project.jobs || []).map((j) => j.name),
+          projectType: project.type,
+          relevanceScore: project.relevance?.score,
         });
         this.state.stats.totalBidsPlaced += 1;
       }
@@ -673,12 +771,11 @@ class ProjectStore {
         }
 
         const bidGate = this.canBidNow();
-        if (config.autoBidEnabled && bidGate.allowed) {
-          const isSimulated = config.dryRunMode;
-          project.bidPlacedAt = Date.now();
-          this.state.stats.totalBidsPlaced += 1;
-
-          const bidLog: BidLog = {
+        if (config.autoBidEnabled && bidGate.allowed && config.dryRunMode) {
+          // Dry run: record a simulated bid so the flow can be reviewed. A real bid is only
+          // logged when the extension reports it submitted; the server never bids itself,
+          // so logging SUCCESS here would count bids that never reached Freelancer.
+          this.state.bids.unshift({
             id: `bid-${Date.now()}-${project.id}`,
             projectId: project.id,
             projectTitle: project.title,
@@ -688,10 +785,11 @@ class ProjectStore {
             deliveryDays: project.bidPeriodDays || config.defaultDeliveryDays,
             proposal: project.generatedProposal,
             timestamp: Date.now(),
-            status: isSimulated ? 'SIMULATED' : 'SUCCESS',
-          };
-
-          this.state.bids.unshift(bidLog);
+            status: 'SIMULATED',
+            skills: (project.jobs || []).map((j) => j.name),
+            projectType: project.type,
+            relevanceScore: project.relevance?.score,
+          });
         } else if (config.autoBidEnabled && !bidGate.allowed) {
           console.log(`[AUTOBID GATE] Project #${project.id} proposal generated, but bidding paused: ${bidGate.reason}`);
         }

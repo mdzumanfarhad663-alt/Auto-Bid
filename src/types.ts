@@ -246,6 +246,16 @@ HARD RULES:
   closeTabOnFailure: true, // Close the tab when the project is closed, already bid, or unbiddable
 };
 
+/**
+ * What happened to a bid after it was placed, as reported by Freelancer.
+ * pending  - project still open
+ * won      - awarded to this account
+ * lost     - awarded to someone else
+ * closed   - project ended with no award (expired, cancelled, deleted)
+ * retracted - this account withdrew the bid
+ */
+export type BidOutcome = 'pending' | 'won' | 'lost' | 'closed' | 'retracted';
+
 export interface BidLog {
   id: string;
   projectId: number;
@@ -258,6 +268,13 @@ export interface BidLog {
   timestamp: number;
   status: 'SUCCESS' | 'SIMULATED' | 'REJECTED' | 'FAILED';
   errorMessage?: string;
+  outcome?: BidOutcome;
+  outcomeCheckedAt?: number;
+  freelancerBidId?: number;
+  paidStatus?: string;
+  skills?: string[];
+  projectType?: 'fixed' | 'hourly';
+  relevanceScore?: number;
 }
 
 export interface SystemStats {

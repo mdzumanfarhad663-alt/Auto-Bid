@@ -15,6 +15,7 @@
 
 import { buildActiveFeedUrl, mapActiveProject, evaluateProject } from './qualification.js';
 import { checkRelevance } from './relevance.js';
+import { buildMyBidsUrl, mapOutcomes, isFinalOutcome } from './outcomes.js';
 
 const LOCAL_DASHBOARD_URL = 'http://localhost:3000';
 
@@ -593,6 +594,11 @@ function handleMessage(message, sender, sendResponse) {
     return true;
   }
 
+  if (message.type === 'SYNC_OUTCOMES_NOW') {
+    syncBidOutcomes(true).then((r) => sendResponse({ success: true, ...(r || {}) }));
+    return true;
+  }
+
   if (message.type === 'TRIGGER_POLL_NOW') {
     runPollingCycle().then((results) => {
       sendResponse({ success: true, results });
@@ -920,6 +926,7 @@ async function runPollingCycle() {
   lastPollAt = Date.now();
   lastPollSummary = summary;
   console.log('[FreelancerAutoBid] Poll summary:', JSON.stringify(summary));
+  syncBidOutcomes().catch(() => {});
   reportHeartbeat();
 
   return newProjectsProcessed;
@@ -1094,6 +1101,69 @@ async function markAlreadyBid(projects) {
     console.log('[FreelancerAutoBid] Already-bid lookup failed:', e.message);
   }
   return projects;
+}
+
+// Outcome sync: how often, and which submitted bids still need checking.
+const OUTCOME_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const OUTCOME_TRACK_DAYS = 30;
+let lastOutcomeSyncAt = 0;
+
+/**
+ * Ask Freelancer what became of the bids this extension submitted, and report any
+ * change to the dashboard. Won and lost are final; everything else is re-checked.
+ */
+async function syncBidOutcomes(force = false) {
+  if (!force && Date.now() - lastOutcomeSyncAt < OUTCOME_SYNC_INTERVAL_MS) return null;
+
+  const me = await getMyFreelancerUserId();
+  if (!me) return null;
+
+  const cutoff = Date.now() - OUTCOME_TRACK_DAYS * 24 * 3600 * 1000;
+  const pending = Object.entries(bidOutcomes)
+    .filter(([, o]) => o.outcome === 'submitted' && o.at >= cutoff && !isFinalOutcome(o.result))
+    .map(([id]) => Number(id));
+
+  lastOutcomeSyncAt = Date.now();
+  if (!pending.length) return { checked: 0, changed: 0 };
+
+  let changed = 0;
+  const updates = [];
+  try {
+    // 40 project ids per request keeps the URL well inside limits.
+    for (let i = 0; i < pending.length; i += 40) {
+      const batch = pending.slice(i, i + 40);
+      const res = await fetch(buildMyBidsUrl(me, batch), { credentials: 'include' });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const mapped = mapOutcomes(data.result);
+
+      for (const [pid, info] of Object.entries(mapped)) {
+        const rec = bidOutcomes[pid];
+        if (!rec) continue;
+        if (rec.result !== info.outcome || rec.paidStatus !== info.paidStatus) {
+          rec.result = info.outcome;
+          rec.paidStatus = info.paidStatus;
+          rec.freelancerBidId = info.bidId;
+          rec.resultCheckedAt = Date.now();
+          changed += 1;
+          updates.push({ projectId: Number(pid), outcome: info.outcome, paidStatus: info.paidStatus, freelancerBidId: info.bidId });
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[FreelancerAutoBid] Outcome sync failed:', e.message);
+  }
+
+  if (changed) {
+    await persistQueueState();
+    fetch(`${getDashboardUrl()}/api/bids/outcomes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    }).catch(() => {});
+    console.log(`[FreelancerAutoBid] Outcome sync: ${changed} bid(s) changed of ${pending.length} checked.`);
+  }
+  return { checked: pending.length, changed };
 }
 
 async function fetchActiveFreelancerProjects() {

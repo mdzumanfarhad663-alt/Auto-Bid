@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, PieChart, TrendingUp, CheckCircle, XCircle, DollarSign, ShieldAlert } from 'lucide-react';
 import { SystemStats } from '../types.ts';
+import { WinRatePanel } from '../components/WinRatePanel.tsx';
 
 export const AnalyticsPage: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -47,6 +48,8 @@ export const AnalyticsPage: React.FC = () => {
           Deep-dive efficiency metrics, qualification rates, and skip reasons
         </p>
       </div>
+
+      <WinRatePanel />
 
       {/* Top 3 High Level Conversion Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
