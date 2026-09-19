@@ -8,6 +8,7 @@ import {
   convertToUSD as sharedConvertToUSD,
   evaluateProject as sharedEvaluateProject,
 } from '../../extension/qualification.js';
+import { checkRelevance } from '../../extension/relevance.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
@@ -590,10 +591,48 @@ class ProjectStore {
       return project;
     }
 
+    project.matchedTags = evaluation.matchedTags;
+
+    // AI relevance gate: only projects that cleared the exact filters reach the model.
+    if (config.aiRelevanceEnabled !== false) {
+      const apiKey = (config.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
+      try {
+        const verdict = await checkRelevance(project, { ...config, openaiApiKey: apiKey });
+        project.relevance = {
+          eligible: verdict.eligible,
+          score: verdict.score,
+          reason: verdict.reason,
+          model: verdict.model,
+          costUSD: verdict.costUSD,
+        };
+        this.state.stats.aiChecks = (this.state.stats.aiChecks || 0) + 1;
+        this.state.stats.aiCostUSD = (this.state.stats.aiCostUSD || 0) + verdict.costUSD;
+
+        if (!verdict.eligible) {
+          project.status = 'SKIPPED';
+          project.skipReason = `Not relevant (${verdict.score}/100): ${verdict.reason}`;
+          this.state.stats.totalSkipped += 1;
+          this.state.stats.skipBreakdown.notRelevant = (this.state.stats.skipBreakdown.notRelevant || 0) + 1;
+          this.state.processedProjectIds.push(project.id);
+          this.insertProject(project);
+          this.persist();
+          return project;
+        }
+      } catch (error: any) {
+        // Fail closed: never bid on a project the gate could not judge.
+        project.status = 'SKIPPED';
+        project.skipReason = `AI relevance check failed: ${error.message}`;
+        this.state.stats.totalSkipped += 1;
+        this.state.processedProjectIds.push(project.id);
+        this.insertProject(project);
+        this.persist();
+        return project;
+      }
+    }
+
     // Qualified! Marked as BID_PLACED so it permanently resides in "Bids Ready"
     this.state.stats.totalQualified += 1;
     project.status = 'BID_PLACED';
-    project.matchedTags = evaluation.matchedTags;
 
     // Resolve unified bid amount and delivery duration
     const resolved = this.resolveBidAmount(project);

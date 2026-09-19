@@ -14,6 +14,7 @@
  */
 
 import { buildActiveFeedUrl, mapActiveProject, evaluateProject } from './qualification.js';
+import { checkRelevance } from './relevance.js';
 
 const LOCAL_DASHBOARD_URL = 'http://localhost:3000';
 
@@ -92,6 +93,9 @@ HARD RULES:
 - Do not repeat the job post back word for word.
 - Do not invent fake client names, fake links, or fake numbers.
 - Output only the proposal text, nothing before or after it.`,
+  aiRelevanceEnabled: true,
+  relevancePrompt: '',
+  relevanceMinScore: 60,
   bidPercentageOfMaxBudget: 85,
   defaultDeliveryDays: 5,
   handsFreeAutoSubmit: true,
@@ -113,8 +117,10 @@ let lastPollAt = 0;
 let lastPollSummary = null;
 let lastError = null;
 
-// Projects whose proposal generation failed for a recoverable reason, and how often.
+// Projects whose proposal generation or relevance check failed for a recoverable
+// reason, and how often. Given up on after MAX_PROPOSAL_ATTEMPTS.
 const proposalFailureCounts = new Map();
+const aiFailureCounts = new Map();
 const MAX_PROPOSAL_ATTEMPTS = 3;
 
 let configSource = 'defaults';
@@ -649,7 +655,7 @@ async function runPollingCycle() {
 
   console.log(`[FreelancerAutoBid] Executing poll cycle from public feed (Interval: ${activeConfig.pollIntervalSeconds}s)...`);
   const newProjectsProcessed = [];
-  const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, topSkipReason: null, skipReasons: {} };
+  const summary = { fetched: 0, alreadySeen: 0, skipped: 0, qualified: 0, queued: 0, proposalErrors: 0, aiChecks: 0, aiRejected: 0, aiCostUSD: 0, topSkipReason: null, skipReasons: {} };
   const skipReasons = summary.skipReasons;
 
   // Pick up filter changes made on the dashboard before evaluating this batch.
@@ -696,10 +702,56 @@ async function runPollingCycle() {
         continue;
       }
 
+      project.matchedTags = evalResult.matchedTags;
+
+      // AI relevance gate. Only survivors of the exact filters cost a model call.
+      if (activeConfig.aiRelevanceEnabled !== false) {
+        try {
+          const apiKey = await resolveOpenAiKey();
+          const verdict = await checkRelevance(project, { ...activeConfig, openaiApiKey: apiKey });
+          project.relevance = {
+            eligible: verdict.eligible,
+            score: verdict.score,
+            reason: verdict.reason,
+            model: verdict.model,
+            costUSD: verdict.costUSD,
+          };
+          summary.aiChecks += 1;
+          summary.aiCostUSD += verdict.costUSD;
+          aiFailureCounts.delete(project.id);
+
+          if (!verdict.eligible) {
+            summary.aiRejected += 1;
+            project.status = 'SKIPPED';
+            project.skipReason = `Not relevant (${verdict.score}/100): ${verdict.reason}`;
+            skipReasons['Not relevant'] = (skipReasons['Not relevant'] || 0) + 1;
+            await recordProjectResult(project);
+            processedIds.add(project.id);
+            await persistProcessedIds();
+            continue;
+          }
+        } catch (relevanceError) {
+          // Fail closed and retry later, the same way a failed proposal is handled.
+          console.error('[FreelancerAutoBid] Relevance check failed:', relevanceError.message);
+          summary.proposalErrors += 1;
+          lastError = `Relevance check failed: ${relevanceError.message}`;
+          const attempts = (aiFailureCounts.get(project.id) || 0) + 1;
+          aiFailureCounts.set(project.id, attempts);
+          if (attempts >= MAX_PROPOSAL_ATTEMPTS) {
+            project.status = 'SKIPPED';
+            project.skipReason = `AI relevance check failed: ${relevanceError.message}`;
+            await recordProjectResult(project);
+            processedIds.add(project.id);
+            await persistProcessedIds();
+            aiFailureCounts.delete(project.id);
+          }
+          continue;
+        }
+      }
+
       // Project Qualified!
       summary.qualified += 1;
       project.status = 'QUALIFIED';
-      project.matchedTags = evalResult.matchedTags;
 
       // Calculate Bid Amount according to strategy & tiers
       const maxBudget = project.budget?.maximum || activeConfig.minBudget;
@@ -1048,8 +1100,11 @@ function evaluateQualification(project, config) {
 /**
  * OpenAI Proposal Generator strictly adhering to the user's custom markdown rules.
  */
-async function generateAiProposal(project, config) {
-  let apiKey = config.openaiApiKey;
+/**
+ * OpenAI key, in precedence order: active config, extension storage, dashboard.
+ */
+async function resolveOpenAiKey() {
+  let apiKey = activeConfig.openaiApiKey;
   if (!apiKey || apiKey.trim() === '') {
     const st = await chrome.storage.local.get(['openaiApiKey', 'config']);
     apiKey = st.openaiApiKey || st.config?.openaiApiKey;
@@ -1069,7 +1124,14 @@ async function generateAiProposal(project, config) {
     } catch (e) {}
   }
 
-  if (!apiKey || apiKey.trim() === '' || apiKey.startsWith('your_openai')) {
+  if (!apiKey || apiKey.trim() === '' || apiKey.startsWith('your_openai')) return '';
+  return apiKey.trim();
+}
+
+async function generateAiProposal(project, config) {
+  const apiKey = (config.openaiApiKey && config.openaiApiKey.trim()) || (await resolveOpenAiKey());
+
+  if (!apiKey) {
     showProjectNotification(
       project.id,
       '⚠️ OpenAI API Key Required',

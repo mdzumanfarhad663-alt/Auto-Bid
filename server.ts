@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { projectStore, getExtensionVersion } from './src/services/store.ts';
 import { generateProposal } from './src/services/openai.ts';
 import { runPollCycle, startBackgroundPoller, fetchFreelancerActiveProjects } from './src/services/freelancer-poller.ts';
+import { checkRelevance } from './extension/relevance.js';
 
 const app = express();
 const PORT = 3000;
@@ -197,6 +198,27 @@ app.post('/api/refresh-live-feed', async (req, res) => {
   }
 });
 
+// Try the relevance prompt against one project without touching its stored status
+app.post('/api/relevance-check', async (req, res) => {
+  try {
+    const { project, projectId, relevancePrompt, relevanceMinScore } = req.body || {};
+    const target = project || (projectId ? projectStore.getProjects(500).find((p) => p.id === Number(projectId)) : null);
+    if (!target) {
+      return res.status(400).json({ error: 'Provide a project or a projectId that has been scanned' });
+    }
+    const config = projectStore.getConfig();
+    const verdict = await checkRelevance(target, {
+      ...config,
+      relevancePrompt: typeof relevancePrompt === 'string' ? relevancePrompt : config.relevancePrompt,
+      relevanceMinScore: typeof relevanceMinScore === 'number' ? relevanceMinScore : config.relevanceMinScore,
+      openaiApiKey: config.openaiApiKey || process.env.OPENAI_API_KEY || '',
+    });
+    res.json({ success: true, projectId: target.id, title: target.title, ...verdict });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // AI Bid Proposal Generation tester endpoint
 app.post('/api/generate-bid', async (req, res) => {
   try {
@@ -234,7 +256,7 @@ app.get('/api/download-extension-zip', async (req, res) => {
     const zip = new JSZip();
     const extDir = path.join(process.cwd(), 'extension');
 
-    for (const file of ['manifest.json', 'background.js', 'qualification.js', 'content.js', 'popup.html', 'popup.js']) {
+    for (const file of ['manifest.json', 'background.js', 'qualification.js', 'relevance.js', 'content.js', 'popup.html', 'popup.js']) {
       zip.file(file, fs.readFileSync(path.join(extDir, file), 'utf-8'));
     }
 

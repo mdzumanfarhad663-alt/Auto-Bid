@@ -1,6 +1,7 @@
 import React from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AiPromptEditor } from '../components/AiPromptEditor.tsx';
+import { RelevanceGateEditor } from '../components/RelevanceGateEditor.tsx';
 import { FilterConfig, FreelancerProject } from '../types.ts';
 
 interface OutletContextType {
@@ -22,6 +23,8 @@ export const AiPromptsPage: React.FC = () => {
           Tune the OpenAI system prompt, proposal structure, dynamic placeholders, and model parameters
         </p>
       </div>
+
+      <RelevanceGateEditor config={config} onSave={onUpdateConfig} />
 
       <AiPromptEditor
         config={config}

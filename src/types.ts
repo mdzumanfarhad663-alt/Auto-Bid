@@ -57,6 +57,13 @@ export interface FreelancerProject {
   };
   status: 'PENDING' | 'QUALIFIED' | 'SKIPPED' | 'BID_PLACED' | 'FAILED';
   skipReason?: string;
+  relevance?: {
+    eligible: boolean;
+    score: number;
+    reason: string;
+    model: string;
+    costUSD: number;
+  };
   matchedTags?: string[];
   matchedBlacklist?: string[];
   generatedProposal?: string;
@@ -102,6 +109,9 @@ export interface FilterConfig {
   portfolioLinks: string[];
   ctaQuestion: string;
   systemPrompt: string;
+  aiRelevanceEnabled: boolean; // Send filter survivors to the model before bidding
+  relevancePrompt: string; // Empty uses the built-in default
+  relevanceMinScore: number; // 0-100; the model's verdict and this threshold must both pass
   openaiApiKey?: string;
   openaiModel: string;
   customOpenAiModel?: string; // Free-form custom model string (e.g. gpt-5.5, gpt-5.6, sol)
@@ -202,6 +212,9 @@ HARD RULES:
 - Do not repeat the job post back word for word.
 - Do not invent fake client names, fake links, or fake numbers.
 - Output only the proposal text, nothing before or after it.`,
+  aiRelevanceEnabled: true,
+  relevancePrompt: '',
+  relevanceMinScore: 60,
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
   customOpenAiModel: '',
@@ -253,6 +266,8 @@ export interface SystemStats {
   totalBidsPlaced: number;
   totalSkipped: number;
   lastPollTimestamp: number;
+  aiChecks?: number;
+  aiCostUSD?: number;
   skipBreakdown: {
     missingMandatoryTags: number;
     blacklistedKeyword: number;
@@ -260,6 +275,7 @@ export interface SystemStats {
     unverifiedPayment: number;
     lowRating: number;
     alreadyProcessed: number;
+    notRelevant?: number;
   };
 }
 
