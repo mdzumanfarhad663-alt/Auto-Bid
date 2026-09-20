@@ -32,7 +32,7 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
   onPollNow,
   isPolling = false,
   onOpenTester,
-  userName = 'Md zuman Farhad',
+  userName = 'Account',
   extensionVersion = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');

@@ -54,9 +54,9 @@ export const DashboardPage: React.FC = () => {
 
   // Extract values with safe defaults
   const user = dashboardData?.user || {
-    name: 'Md zuman Farhad',
-    email: 'mdzumanfarhad663@gmail.com',
-    trialDaysLeft: 5,
+    name: 'Account',
+    email: '',
+    trialDaysLeft: 0,
     extensionVersion: '',
     extensionStatus: 'idle',
   };

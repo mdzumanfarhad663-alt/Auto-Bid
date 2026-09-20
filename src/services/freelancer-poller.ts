@@ -4,8 +4,9 @@
  * or generates realistic mock stream when testing in sandbox.
  */
 
-import { FreelancerProject } from '../types.ts';
+import { FreelancerProject, FilterConfig } from '../types.ts';
 import { projectStore } from './store.ts';
+import { listBiddableUserIds } from './users.ts';
 import { buildActiveFeedUrl, mapActiveProject } from '../../extension/qualification.js';
 
 const SAMPLE_PROJECT_TEMPLATES = [
@@ -208,9 +209,8 @@ export async function fetchFromFreelancerPublicApi(): Promise<FreelancerProject[
   }
 }
 
-export async function fetchFreelancerActiveProjects(): Promise<FreelancerProject[]> {
-  const config = projectStore.getConfig();
-  const feedSource = config.feedSource || 'auto';
+export async function fetchFreelancerActiveProjects(feedSource: FilterConfig['feedSource'] = 'auto'): Promise<FreelancerProject[]> {
+  feedSource = feedSource || 'auto';
 
   let projects: FreelancerProject[] = [];
 
@@ -289,40 +289,45 @@ export async function fetchFreelancerActiveProjects(): Promise<FreelancerProject
   ];
 }
 
-export async function runPollCycle(): Promise<FreelancerProject[]> {
+/**
+ * Evaluate a batch of projects for one user.
+ */
+export async function runPollCycleFor(userId: string, incoming?: FreelancerProject[]): Promise<FreelancerProject[]> {
   try {
-    const incomingProjects = await fetchFreelancerActiveProjects();
+    const projects = incoming || (await fetchFreelancerActiveProjects(projectStore.getConfig(userId).feedSource));
     const processed: FreelancerProject[] = [];
-
-    for (const p of incomingProjects) {
-      const result = await projectStore.processProject(p);
-      processed.push(result);
+    for (const p of projects) {
+      processed.push(await projectStore.processProject(userId, p));
     }
-
     return processed;
   } catch (err) {
-    console.error('[FreelancerPoller] Error during poll cycle:', err);
+    console.error(`[FreelancerPoller] Poll cycle failed for ${userId.slice(0, 8)}:`, err);
     return [];
   }
 }
 
+/**
+ * One feed fetch, then every active account in its trial gets the batch. The feed is
+ * public and identical for everyone, so fetching it per user would only waste requests.
+ */
+export async function runPollCycle(): Promise<{ users: number; projects: number }> {
+  const userIds = listBiddableUserIds();
+  if (userIds.length === 0) return { users: 0, projects: 0 };
+
+  const feed = await fetchFreelancerActiveProjects('auto');
+  for (const userId of userIds) {
+    if (!projectStore.getConfig(userId).autoBidEnabled) continue;
+    await runPollCycleFor(userId, feed.map((p) => ({ ...p })));
+  }
+  return { users: userIds.length, projects: feed.length };
+}
+
 export function startBackgroundPoller(intervalSeconds = 30) {
   currentIntervalSeconds = intervalSeconds;
-  if (pollIntervalTimer) {
-    clearInterval(pollIntervalTimer);
-  }
+  if (pollIntervalTimer) clearInterval(pollIntervalTimer);
 
-  console.log(`[FreelancerPoller] Starting background Freelancer poller every ${intervalSeconds}s (No OAuth required)`);
+  console.log(`[FreelancerPoller] Background poller every ${intervalSeconds}s for all active accounts`);
   pollIntervalTimer = setInterval(() => {
-    const config = projectStore.getConfig();
-    // Check if interval was changed by user in settings
-    if (config.pollIntervalSeconds && config.pollIntervalSeconds !== currentIntervalSeconds) {
-      startBackgroundPoller(config.pollIntervalSeconds);
-      return;
-    }
-
-    if (config.autoBidEnabled) {
-      runPollCycle().catch((err) => console.error('[FreelancerPoller] Background run error:', err));
-    }
+    runPollCycle().catch((err) => console.error('[FreelancerPoller] Background run error:', err));
   }, Math.max(10, intervalSeconds) * 1000);
 }

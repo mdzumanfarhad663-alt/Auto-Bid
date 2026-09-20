@@ -338,6 +338,22 @@ export interface DashboardRecentScan {
   skipReason: string;
 }
 
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  role: 'user' | 'admin';
+  status: 'active' | 'suspended';
+  hasPassword: boolean;
+  hasGoogle: boolean;
+  createdAt: number;
+  extensionToken: { configured: boolean; createdAt: number | null; lastUsedAt: number | null };
+  trialEndsAt: number;
+  trialDaysLeft: number;
+  trialExpired: boolean;
+}
+
 export interface DashboardData {
   user: {
     name: string;

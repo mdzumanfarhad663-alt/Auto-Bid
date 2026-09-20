@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar.tsx';
 import { UtilityHeader } from './UtilityHeader.tsx';
 import { PromoBanner } from './PromoBanner.tsx';
 import { ProposalTesterModal } from '../ProposalTesterModal.tsx';
-import { FilterConfig, FreelancerProject } from '../../types.ts';
+import { FilterConfig, FreelancerProject, PublicUser } from '../../types.ts';
 
 interface AppLayoutProps {
   config: FilterConfig;
@@ -12,6 +12,7 @@ interface AppLayoutProps {
   onPollNow: () => void;
   isPolling: boolean;
   pollSecondsRemaining: number;
+  currentUser: PublicUser;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -20,6 +21,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onPollNow,
   isPolling,
   pollSecondsRemaining,
+  currentUser,
 }) => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isTesterModalOpen, setIsTesterModalOpen] = useState(false);
@@ -43,6 +45,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         onClose={() => setIsMobileSidebarOpen(false)}
         extensionStatus={config.autoBidEnabled ? 'running' : 'idle'}
         extensionVersion={extensionVersion}
+        currentUser={currentUser}
       />
 
       {/* Main Right Layout Area */}
@@ -58,9 +61,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             setTestProject(null);
             setIsTesterModalOpen(true);
           }}
-          userName="Md zuman Farhad"
+          userName={currentUser.name || currentUser.email}
           extensionVersion={extensionVersion}
         />
+
+        {/* Trial banner: bidding is blocked, but the account and its data are still visible */}
+        {currentUser.trialExpired && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 lg:px-8 py-2 text-xs text-amber-800 flex items-center justify-between gap-3">
+            <span>Your free trial has ended. New bids are paused — contact the administrator to continue.</span>
+          </div>
+        )}
 
         {/* Promotional Audit Banner */}
         <PromoBanner />

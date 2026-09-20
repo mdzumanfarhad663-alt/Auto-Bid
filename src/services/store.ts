@@ -10,10 +10,15 @@ import {
 } from '../../extension/qualification.js';
 import { checkRelevance } from '../../extension/relevance.js';
 import { getOpenAiKey, setSecret, hasSecret } from './auth.ts';
+import { getDb, getMeta, setMeta } from './db.ts';
+import { findById as findUser, trialInfo, canUserBid } from './users.ts';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'store.json');
 const MANIFEST_FILE = path.join(process.cwd(), 'extension', 'manifest.json');
+const LEGACY_STORE_FILE = path.join(process.cwd(), 'data', 'store.json');
+
+const PROJECT_CACHE_LIMIT = 250;
+const BID_CACHE_LIMIT = 500;
+const LEGACY_MOCK_IDS = [38994889, 38920141, 38920142, 38920143, 38920144, 38920145];
 
 export function getExtensionVersion(): string {
   try {
@@ -31,207 +36,255 @@ export function convertToUSD(amount: number, currency: string): number {
   return sharedConvertToUSD(amount, currency);
 }
 
-interface StoreState {
+/**
+ * One user's working set. Loaded from SQLite on first touch and kept in memory; every
+ * mutation is written through row-by-row, so the cache never needs a bulk flush.
+ */
+interface UserState {
   config: FilterConfig;
-  processedProjectIds: number[];
-  projects: FreelancerProject[];
-  bids: BidLog[];
+  processedProjectIds: Set<number>;
+  projects: FreelancerProject[]; // newest first, capped
+  bids: BidLog[]; // newest first, capped
   stats: SystemStats;
 }
 
+function initialStats(): SystemStats {
+  return {
+    totalScanned: 0,
+    totalQualified: 0,
+    totalBidsPlaced: 0,
+    totalSkipped: 0,
+    lastPollTimestamp: Date.now(),
+    skipBreakdown: {
+      missingMandatoryTags: 0,
+      blacklistedKeyword: 0,
+      budgetOutOfRange: 0,
+      unverifiedPayment: 0,
+      lowRating: 0,
+      alreadyProcessed: 0,
+    },
+  };
+}
+
+function sanitizeConfig(raw: Partial<FilterConfig> | null | undefined): FilterConfig {
+  const cfg: FilterConfig = { ...DEFAULT_CONFIG, ...(raw || {}) };
+  if (cfg.autoOpenQualified === undefined) cfg.autoOpenQualified = true;
+  if (cfg.allowedCurrencies && !cfg.allowedCurrencies.includes('INR')) {
+    cfg.allowedCurrencies = [...cfg.allowedCurrencies, 'INR', 'SGD', 'NZD', 'PHP'];
+  }
+  cfg.openaiApiKey = '';
+  return cfg;
+}
+
 class ProjectStore {
-  private state: StoreState;
+  private cache = new Map<string, UserState>();
 
-  constructor() {
-    this.state = this.loadState();
-    if (this.state.projects.length === 0) {
-      this.seedInitialRealProjects();
-    }
-  }
+  // ---------------------------------------------------------------- persistence
 
-  private loadState(): StoreState {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
+  private load(userId: string): UserState {
+    const cached = this.cache.get(userId);
+    if (cached) return cached;
 
-        // Filter out legacy fake mock projects or broken sample-job URLs
-        const cleanProjects = (parsed.projects || []).filter((p: FreelancerProject) => {
-          if (!p || !p.id) return false;
-          if (p.url && p.url.includes('sample-job')) return false;
-          if ([38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(p.id)) {
-            return false;
-          }
-          return true;
-        });
+    const db = getDb();
+    const cfgRow = db.prepare('SELECT config_json FROM user_config WHERE user_id = ?').get(userId) as { config_json: string } | undefined;
+    const statsRow = db.prepare('SELECT stats_json FROM stats WHERE user_id = ?').get(userId) as { stats_json: string } | undefined;
+    const projectRows = db
+      .prepare('SELECT data_json FROM projects WHERE user_id = ? ORDER BY submit_date DESC, id DESC LIMIT ?')
+      .all(userId, PROJECT_CACHE_LIMIT) as Array<{ data_json: string }>;
+    const bidRows = db
+      .prepare('SELECT data_json FROM bids WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?')
+      .all(userId, BID_CACHE_LIMIT) as Array<{ data_json: string }>;
+    const processedRows = db.prepare('SELECT project_id FROM processed_project_ids WHERE user_id = ?').all(userId) as Array<{ project_id: number }>;
 
-        const cleanBids = (parsed.bids || []).filter((b: BidLog) => {
-          if (!b || !b.projectId) return false;
-          if ([38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(b.projectId)) {
-            return false;
-          }
-          return true;
-        });
-
-        let loadedConfig = { ...DEFAULT_CONFIG, ...(parsed.config || {}) };
-        if (loadedConfig.autoOpenQualified === undefined) {
-          loadedConfig.autoOpenQualified = true;
-        }
-        // Clean legacy hardcoded generic CTA question
-        if (
-          loadedConfig.ctaQuestion &&
-          (loadedConfig.ctaQuestion.includes('5-minute technical review') ||
-           loadedConfig.ctaQuestion.includes('Are you available for a quick'))
-        ) {
-          loadedConfig.ctaQuestion = '';
-        }
-
-        // Ensure popular currencies like INR are included
-        if (loadedConfig.allowedCurrencies && !loadedConfig.allowedCurrencies.includes('INR')) {
-          loadedConfig.allowedCurrencies.push('INR', 'SGD', 'NZD', 'PHP');
-        }
-
-        if (process.env.AUTOBID_CONFIG_JSON) {
-          try {
-            const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
-            if (envParsed && typeof envParsed === 'object') {
-              loadedConfig = { ...loadedConfig, ...envParsed };
-            }
-          } catch (e) {}
-        }
-
-        // The key used to live in plain text inside config. Move it into the encrypted
-        // secret store once, then keep config free of it.
-        if (loadedConfig.openaiApiKey && !hasSecret('openaiApiKey')) {
-          setSecret('openaiApiKey', String(loadedConfig.openaiApiKey).trim());
-        }
-        loadedConfig.openaiApiKey = '';
-
-        return {
-          config: loadedConfig,
-          processedProjectIds: (parsed.processedProjectIds || []).filter((id: number) => 
-            ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(id)
-          ),
-          projects: cleanProjects,
-          bids: cleanBids,
-          stats: parsed.stats || this.getInitialStats(),
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to load store.json, using defaults:', e);
-    }
-
-    let defaultCfg = { ...DEFAULT_CONFIG };
-    if (process.env.AUTOBID_CONFIG_JSON) {
-      try {
-        const envParsed = JSON.parse(process.env.AUTOBID_CONFIG_JSON);
-        if (envParsed && typeof envParsed === 'object') {
-          defaultCfg = { ...defaultCfg, ...envParsed };
-        }
-      } catch (e) {}
-    }
-
-    return {
-      config: defaultCfg,
-      processedProjectIds: [],
-      projects: [],
-      bids: [],
-      stats: this.getInitialStats(),
+    const state: UserState = {
+      config: sanitizeConfig(cfgRow ? JSON.parse(cfgRow.config_json) : null),
+      processedProjectIds: new Set(processedRows.map((r) => r.project_id)),
+      projects: projectRows.map((r) => JSON.parse(r.data_json)),
+      bids: bidRows.map((r) => JSON.parse(r.data_json)),
+      stats: statsRow ? JSON.parse(statsRow.stats_json) : initialStats(),
     };
+    this.cache.set(userId, state);
+    return state;
   }
 
-  private getInitialStats(): SystemStats {
-    return {
-      totalScanned: 0,
-      totalQualified: 0,
-      totalBidsPlaced: 0,
-      totalSkipped: 0,
-      lastPollTimestamp: Date.now(),
-      skipBreakdown: {
-        missingMandatoryTags: 0,
-        blacklistedKeyword: 0,
-        budgetOutOfRange: 0,
-        unverifiedPayment: 0,
-        lowRating: 0,
-        alreadyProcessed: 0,
-      },
-    };
+  /** Drop a user's cached state (after admin deletes the user, or to force a reload). */
+  public evict(userId: string) {
+    this.cache.delete(userId);
   }
 
-  private persist() {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.state, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Error persisting store.json:', e);
-    }
+  private saveConfig(userId: string, config: FilterConfig) {
+    getDb()
+      .prepare('INSERT INTO user_config(user_id, config_json) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET config_json = excluded.config_json')
+      .run(userId, JSON.stringify(config));
   }
 
-  public getConfig(): FilterConfig {
-    return this.state.config;
+  private saveStats(userId: string, stats: SystemStats) {
+    getDb()
+      .prepare('INSERT INTO stats(user_id, stats_json) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET stats_json = excluded.stats_json')
+      .run(userId, JSON.stringify(stats));
   }
 
-  public updateConfig(newConfig: Partial<FilterConfig>): FilterConfig {
-    const { openaiApiKey, ...rest } = newConfig;
-    // A key sent through the settings form goes to the encrypted store, never into config.
-    if (typeof openaiApiKey === 'string' && openaiApiKey.trim() && !openaiApiKey.includes('…')) {
-      setSecret('openaiApiKey', openaiApiKey.trim());
-    }
-    this.state.config = { ...this.state.config, ...rest, openaiApiKey: '' };
-    this.persist();
-    return this.state.config;
+  private saveProject(userId: string, project: FreelancerProject) {
+    getDb()
+      .prepare(
+        'INSERT INTO projects(user_id, id, data_json, submit_date) VALUES(?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET data_json = excluded.data_json, submit_date = excluded.submit_date'
+      )
+      .run(userId, project.id, JSON.stringify(project), project.submitDate || 0);
   }
 
-  public getStats(): SystemStats {
-    return this.state.stats;
+  private saveBid(userId: string, bid: BidLog) {
+    getDb()
+      .prepare(
+        'INSERT INTO bids(user_id, bid_key, project_id, data_json, timestamp) VALUES(?, ?, ?, ?, ?) ON CONFLICT(user_id, bid_key) DO UPDATE SET data_json = excluded.data_json, timestamp = excluded.timestamp'
+      )
+      .run(userId, bid.id, bid.projectId, JSON.stringify(bid), bid.timestamp || Date.now());
   }
 
-  public getProjects(limit = 100): FreelancerProject[] {
-    return this.state.projects.slice(0, limit);
+  private markProcessed(userId: string, state: UserState, projectId: number) {
+    state.processedProjectIds.add(projectId);
+    getDb().prepare('INSERT OR IGNORE INTO processed_project_ids(user_id, project_id) VALUES(?, ?)').run(userId, projectId);
   }
 
-  public getBids(limit = 100): BidLog[] {
-    return this.state.bids.slice(0, limit);
+  private insertProject(userId: string, state: UserState, project: FreelancerProject) {
+    const idx = state.projects.findIndex((p) => p.id === project.id);
+    if (idx >= 0) state.projects[idx] = project;
+    else state.projects.unshift(project);
+    if (state.projects.length > PROJECT_CACHE_LIMIT) state.projects.length = PROJECT_CACHE_LIMIT;
+    this.saveProject(userId, project);
   }
 
-  public clearHistory() {
-    this.state.processedProjectIds = [];
-    this.state.projects = [];
-    this.state.bids = [];
-    this.state.stats = this.getInitialStats();
-    this.persist();
+  private pushBid(userId: string, state: UserState, bid: BidLog) {
+    state.bids.unshift(bid);
+    if (state.bids.length > BID_CACHE_LIMIT) state.bids.length = BID_CACHE_LIMIT;
+    this.saveBid(userId, bid);
   }
 
   /**
-   * Freelancer's verdict on submitted bids, synced by the extension.
+   * One-time import of the single-tenant data/store.json into the first admin account, so
+   * nothing that was already scanned or bid on is lost in the move to per-user storage.
    */
+  public importLegacyStore(userId: string): { projects: number; bids: number } | null {
+    if (getMeta('legacy_store_imported')) return null;
+    if (!fs.existsSync(LEGACY_STORE_FILE)) {
+      setMeta('legacy_store_imported', 'none');
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(LEGACY_STORE_FILE, 'utf-8'));
+      let config = sanitizeConfig(parsed.config);
+      if (process.env.AUTOBID_CONFIG_JSON) {
+        try {
+          config = sanitizeConfig({ ...config, ...JSON.parse(process.env.AUTOBID_CONFIG_JSON) });
+        } catch {}
+      }
+      if (parsed.config?.openaiApiKey && !hasSecret('openaiApiKey')) {
+        setSecret('openaiApiKey', String(parsed.config.openaiApiKey).trim());
+      }
+
+      const projects: FreelancerProject[] = (parsed.projects || []).filter(
+        (p: FreelancerProject) => p && p.id && !p.url?.includes('sample-job') && !LEGACY_MOCK_IDS.includes(p.id)
+      );
+      const bids: BidLog[] = (parsed.bids || []).filter((b: BidLog) => b && b.projectId && !LEGACY_MOCK_IDS.includes(b.projectId));
+      const processed: number[] = (parsed.processedProjectIds || []).filter((id: number) => !LEGACY_MOCK_IDS.includes(id));
+
+      const db = getDb();
+      db.exec('BEGIN');
+      try {
+        this.saveConfig(userId, config);
+        this.saveStats(userId, parsed.stats || initialStats());
+        for (const p of projects) this.saveProject(userId, p);
+        for (const b of bids) this.saveBid(userId, b);
+        const ins = db.prepare('INSERT OR IGNORE INTO processed_project_ids(user_id, project_id) VALUES(?, ?)');
+        for (const id of processed) ins.run(userId, id);
+        db.exec('COMMIT');
+      } catch (e) {
+        db.exec('ROLLBACK');
+        throw e;
+      }
+      setMeta('legacy_store_imported', new Date().toISOString());
+      this.cache.delete(userId);
+      console.log(`[Store] Imported legacy store.json into admin: ${projects.length} projects, ${bids.length} bids.`);
+      return { projects: projects.length, bids: bids.length };
+    } catch (e) {
+      console.warn('[Store] Legacy import failed:', e);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------- config / reads
+
+  public getConfig(userId: string): FilterConfig {
+    return this.load(userId).config;
+  }
+
+  public updateConfig(userId: string, newConfig: Partial<FilterConfig>, isAdmin = false): FilterConfig {
+    const state = this.load(userId);
+    const { openaiApiKey, ...rest } = newConfig;
+    // Only an admin may change the shared key, and never through config itself.
+    if (isAdmin && typeof openaiApiKey === 'string' && openaiApiKey.trim() && !openaiApiKey.includes('…')) {
+      setSecret('openaiApiKey', openaiApiKey.trim());
+    }
+    state.config = { ...state.config, ...rest, openaiApiKey: '' };
+    this.saveConfig(userId, state.config);
+    return state.config;
+  }
+
+  public getStats(userId: string): SystemStats {
+    return this.load(userId).stats;
+  }
+
+  public getProjects(userId: string, limit = 100): FreelancerProject[] {
+    return this.load(userId).projects.slice(0, limit);
+  }
+
+  public getBids(userId: string, limit = 100): BidLog[] {
+    return this.load(userId).bids.slice(0, limit);
+  }
+
+  public clearHistory(userId: string) {
+    const db = getDb();
+    db.exec('BEGIN');
+    try {
+      db.prepare('DELETE FROM projects WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM bids WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM processed_project_ids WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM stats WHERE user_id = ?').run(userId);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    const state = this.load(userId);
+    state.projects = [];
+    state.bids = [];
+    state.processedProjectIds = new Set();
+    state.stats = initialStats();
+  }
+
+  // ---------------------------------------------------------------- outcomes
+
   public recordBidOutcomes(
+    userId: string,
     updates: Array<{ projectId: number; outcome: BidOutcome; paidStatus?: string | null; freelancerBidId?: number }>
   ): number {
+    const state = this.load(userId);
     let changed = 0;
     for (const u of updates) {
-      const log = this.state.bids.find((b) => b.projectId === u.projectId);
+      const log = state.bids.find((b) => b.projectId === u.projectId);
       if (!log) continue;
       if (log.outcome !== u.outcome || log.paidStatus !== (u.paidStatus || undefined)) changed += 1;
       log.outcome = u.outcome;
       log.outcomeCheckedAt = Date.now();
       if (u.paidStatus) log.paidStatus = u.paidStatus;
       if (u.freelancerBidId) log.freelancerBidId = u.freelancerBidId;
+      this.saveBid(userId, log);
     }
-    if (changed) this.persist();
     return changed;
   }
 
-  /**
-   * Win-rate broken down by the dimensions a user can actually tune.
-   */
-  public getOutcomeAnalytics() {
-    const bids = this.state.bids.filter((b) => b.status === 'SUCCESS');
+  public getOutcomeAnalytics(userId: string) {
+    const state = this.load(userId);
+    const bids = state.bids.filter((b) => b.status === 'SUCCESS');
     const decided = bids.filter((b) => b.outcome === 'won' || b.outcome === 'lost');
     const won = decided.filter((b) => b.outcome === 'won');
 
@@ -253,7 +306,7 @@ class ProjectStore {
         .sort((a, c) => c.bids - a.bids);
     };
 
-    const project = (b: BidLog) => this.state.projects.find((p) => p.id === b.projectId);
+    const project = (b: BidLog) => state.projects.find((p) => p.id === b.projectId);
     const budgetBand = (b: BidLog) => {
       const p = project(b);
       const usd = p ? convertToUSD(p.budget.maximum, p.budget.currency) : b.bidAmount;
@@ -270,7 +323,7 @@ class ProjectStore {
       lost: decided.length - won.length,
       winRate: decided.length ? won.length / decided.length : null,
       byOutcome,
-      bySkill: this.groupBySkill(bids),
+      bySkill: this.groupBySkill(state, bids),
       byBudgetBand: group(budgetBand),
       byProjectType: group((b) => b.projectType || project(b)?.type || null),
       byCountry: group((b) => project(b)?.client?.country || null),
@@ -283,10 +336,10 @@ class ProjectStore {
     };
   }
 
-  private groupBySkill(bids: BidLog[]) {
+  private groupBySkill(state: UserState, bids: BidLog[]) {
     const acc: Record<string, { bids: number; won: number; lost: number }> = {};
     for (const b of bids) {
-      const p = this.state.projects.find((x) => x.id === b.projectId);
+      const p = state.projects.find((x) => x.id === b.projectId);
       const skills = b.skills || p?.jobs?.map((j) => j.name) || [];
       for (const s of skills) {
         acc[s] = acc[s] || { bids: 0, won: 0, lost: 0 };
@@ -306,30 +359,32 @@ class ProjectStore {
    * status of a project it has already stored, so without this a bid that failed on
    * Freelancer stays listed as ready forever.
    */
-  public recordBidOutcome(projectId: number, outcome: 'submitted' | 'failed', reason?: string): FreelancerProject | null {
-    const project = this.state.projects.find((p) => p.id === projectId);
+  public recordBidOutcome(userId: string, projectId: number, outcome: 'submitted' | 'failed', reason?: string): FreelancerProject | null {
+    const state = this.load(userId);
+    const project = state.projects.find((p) => p.id === projectId);
     if (!project) return null;
 
     if (outcome === 'failed') {
       project.status = 'FAILED';
       project.skipReason = reason || 'Bid could not be placed';
-      const log = this.state.bids.find((b) => b.projectId === projectId);
+      const log = state.bids.find((b) => b.projectId === projectId);
       if (log) {
         log.status = 'FAILED';
         log.errorMessage = project.skipReason;
+        this.saveBid(userId, log);
       }
     } else {
       project.status = 'BID_PLACED';
       project.bidPlacedAt = Date.now();
-      if (!this.state.bids.some((b) => b.projectId === projectId)) {
-        this.state.bids.unshift({
+      if (!state.bids.some((b) => b.projectId === projectId)) {
+        this.pushBid(userId, state, {
           id: `bid-${Date.now()}-${projectId}`,
           projectId,
           projectTitle: project.title,
           clientUsername: project.client?.username || '',
           bidAmount: project.bidAmount || 0,
           currency: project.budget?.currency || 'USD',
-          deliveryDays: project.bidPeriodDays || this.state.config.defaultDeliveryDays,
+          deliveryDays: project.bidPeriodDays || state.config.defaultDeliveryDays,
           proposal: project.generatedProposal || '',
           timestamp: Date.now(),
           status: 'SUCCESS',
@@ -338,15 +393,20 @@ class ProjectStore {
           projectType: project.type,
           relevanceScore: project.relevance?.score,
         });
-        this.state.stats.totalBidsPlaced += 1;
+        state.stats.totalBidsPlaced += 1;
+        this.saveStats(userId, state.stats);
       }
     }
 
-    this.persist();
+    this.saveProject(userId, project);
     return project;
   }
 
-  public getDashboardData(): DashboardData {
+  // ---------------------------------------------------------------- dashboard
+
+  public getDashboardData(userId: string): DashboardData {
+    const state = this.load(userId);
+    const user = findUser(userId);
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -359,23 +419,18 @@ class ProjectStore {
     startOfMonth.setHours(0, 0, 0, 0);
     const startOfMonthMs = startOfMonth.getTime();
 
-    const bids = this.state.bids || [];
-    const projects = this.state.projects || [];
+    const bids = state.bids;
+    const projects = state.projects;
 
-    // Filter calculations
     const bidsToday = bids.filter((b) => (b.timestamp || 0) >= startOfTodayMs).length;
     const scansToday = projects.filter((p) => (p.submitDate || 0) >= startOfTodayMs).length;
-
     const bidsThisWeek = bids.filter((b) => (b.timestamp || 0) >= oneWeekAgo).length;
     const scansThisWeek = projects.filter((p) => (p.submitDate || 0) >= oneWeekAgo).length;
-
     const bidsThisMonth = bids.filter((b) => (b.timestamp || 0) >= startOfMonthMs).length;
     const scansThisMonth = projects.filter((p) => (p.submitDate || 0) >= startOfMonthMs).length;
+    const bidsAllTime = Math.max(state.stats.totalBidsPlaced || 0, bids.length);
+    const scansAllTime = Math.max(state.stats.totalScanned || 0, projects.length);
 
-    const bidsAllTime = Math.max(this.state.stats.totalBidsPlaced || 0, bids.length);
-    const scansAllTime = Math.max(this.state.stats.totalScanned || 0, projects.length);
-
-    // 24H activity points (-24h, -18h, -12h, -6h, Now)
     const intervals = [
       { label: '-24h', start: now - 24 * 3600000, end: now - 18 * 3600000 },
       { label: '-18h', start: now - 18 * 3600000, end: now - 12 * 3600000 },
@@ -383,197 +438,132 @@ class ProjectStore {
       { label: '-6h', start: now - 6 * 3600000, end: now - 1 * 3600000 },
       { label: 'Now', start: now - 1 * 3600000, end: now + 60000 },
     ];
-
-    const activityPoints = intervals.map((int) => {
-      const scansInSlot = projects.filter((p) => (p.submitDate || 0) >= int.start && (p.submitDate || 0) <= int.end).length;
-      const bidsInSlot = bids.filter((b) => (b.timestamp || 0) >= int.start && (b.timestamp || 0) <= int.end).length;
-      return {
-        label: int.label,
-        scans: scansInSlot,
-        bids: bidsInSlot,
-      };
-    });
+    const activityPoints = intervals.map((int) => ({
+      label: int.label,
+      scans: projects.filter((p) => (p.submitDate || 0) >= int.start && (p.submitDate || 0) <= int.end).length,
+      bids: bids.filter((b) => (b.timestamp || 0) >= int.start && (b.timestamp || 0) <= int.end).length,
+    }));
 
     const totalBids24h = bids.filter((b) => (b.timestamp || 0) >= oneDayAgo).length;
     const totalScans24h = projects.filter((p) => (p.submitDate || 0) >= oneDayAgo).length;
 
-    // Recent bids formatted
     const recentBids = bids.slice(0, 10).map((b) => {
       const matchedProj = projects.find((p) => p.id === b.projectId);
-      const skills = matchedProj?.jobs?.map((j: any) => (typeof j === 'string' ? j : j.name)) || [
-        'React',
-        'WordPress',
-        'PHP',
-        'HTML',
-        'CSS',
-      ];
-
+      const skills = b.skills || matchedProj?.jobs?.map((j: any) => (typeof j === 'string' ? j : j.name)) || [];
       return {
         id: b.id,
         projectId: b.projectId,
         projectTitle: b.projectTitle || matchedProj?.title || `Freelancer Project #${b.projectId}`,
         projectUrl: matchedProj?.url || `https://www.freelancer.com/projects/${b.projectId}`,
-        projectType: (matchedProj?.title?.toLowerCase().includes('hourly') ? 'Hourly' : 'Fixed') as 'Fixed' | 'Hourly',
-        bidAmount: b.bidAmount || 50,
+        projectType: ((b.projectType || matchedProj?.type) === 'hourly' ? 'Hourly' : 'Fixed') as 'Fixed' | 'Hourly',
+        bidAmount: b.bidAmount || 0,
         currency: b.currency || matchedProj?.budget?.currency || 'USD',
-        deliveryDays: b.deliveryDays || 3,
-        skills: skills.length > 0 ? skills : ['Web Development', 'PHP', 'HTML'],
+        deliveryDays: b.deliveryDays || 0,
+        skills,
         timestamp: b.timestamp || Date.now(),
         status: b.status,
-        reasonBadge: 'Already bid on this project in your account',
+        reasonBadge: b.outcome ? `Outcome: ${b.outcome}` : b.status === 'SIMULATED' ? 'Dry run' : 'Submitted',
       };
     });
 
-    // Recent scans formatted
     const recentScans = projects.slice(0, 10).map((p) => {
       const isSkipped = p.status === 'SKIPPED';
-      const isBlacklisted = p.skipReason?.includes('Blacklisted') || (p.matchedBlacklist && p.matchedBlacklist.length > 0);
+      const isBlacklisted = p.skipReason?.includes('Excluded') || (p.matchedBlacklist && p.matchedBlacklist.length > 0);
       let eligibility: 'Ineligible' | 'Eligible' | 'Excluded by you' = 'Eligible';
-      if (isSkipped) {
-        eligibility = isBlacklisted ? 'Excluded by you' : 'Ineligible';
-      }
-
+      if (isSkipped) eligibility = isBlacklisted ? 'Excluded by you' : 'Ineligible';
       const skills = (p.jobs || []).map((j: any) => (typeof j === 'string' ? j : j.name));
-      const budgetFormatted = p.budget
-        ? `${p.budget.currency} ${p.budget.minimum} - ${p.budget.maximum}`
-        : 'Budget Undefined';
-
       return {
         id: p.id,
         title: p.title,
         url: p.url || `https://www.freelancer.com/projects/${p.id}`,
-        projectType: p.title?.toLowerCase().includes('hourly') ? 'Hourly' : 'Fixed',
-        budgetFormatted,
+        projectType: p.type === 'hourly' ? 'Hourly' : 'Fixed',
+        budgetFormatted: p.budget ? `${p.budget.currency} ${p.budget.minimum} - ${p.budget.maximum}` : 'Budget Undefined',
         currency: p.budget?.currency || 'USD',
-        skills: skills.length > 0 ? skills : ['Web Development', 'JavaScript'],
+        skills,
         timestamp: p.submitDate || Date.now(),
         eligibility,
         skipReason: p.skipReason || 'Matched all configured qualification filters and skill requirements.',
       };
     });
 
+    const trial = user ? trialInfo(user) : { trialDaysLeft: 0, trialExpired: true, trialEndsAt: 0 };
+
     return {
       user: {
-        name: 'Md zuman Farhad',
-        email: 'mdzumanfarhad663@gmail.com',
-        trialDaysLeft: 5,
+        name: user?.name || user?.email || 'User',
+        email: user?.email || '',
+        trialDaysLeft: trial.trialDaysLeft,
         extensionVersion: getExtensionVersion(),
-        extensionStatus: this.state.config.autoBidEnabled ? 'running' : 'idle',
+        extensionStatus: state.config.autoBidEnabled ? 'running' : 'idle',
       },
-      stats: {
-        bidsToday,
-        scansToday,
-        bidsThisWeek,
-        scansThisWeek,
-        bidsThisMonth,
-        scansThisMonth,
-        bidsAllTime,
-        scansAllTime,
-      },
-      comparisons: {
-        bidsWeekChange: bidsThisWeek,
-        scansWeekChange: scansThisWeek,
-      },
-      activity24h: {
-        points: activityPoints,
-        totalBids24h,
-        totalScans24h,
-      },
+      stats: { bidsToday, scansToday, bidsThisWeek, scansThisWeek, bidsThisMonth, scansThisMonth, bidsAllTime, scansAllTime },
+      comparisons: { bidsWeekChange: bidsThisWeek, scansWeekChange: scansThisWeek },
+      activity24h: { points: activityPoints, totalBids24h, totalScans24h },
       recentBids,
       recentScans,
     };
   }
 
+  // ---------------------------------------------------------------- bidding rules
 
-  /**
-   * Helper to determine if current local time is inside active hours window
-   * Full 24h format support, including overnight ranges (e.g. From: 22 To: 6)
-   */
   public isInsideActiveHours(fromHour = 0, toHour = 24, currentHour?: number): boolean {
     const hour = currentHour !== undefined ? currentHour : new Date().getHours();
-    
-    // Full day coverage (0 to 24)
-    if (fromHour === 0 && toHour === 24) {
-      return true;
-    }
-
-    // Normal window (e.g. 9 to 17)
-    if (fromHour < toHour) {
-      return hour >= fromHour && hour < toHour;
-    }
-
-    // Overnight window (e.g. 22 to 6)
-    if (fromHour > toHour) {
-      return hour >= fromHour || hour < toHour;
-    }
-
-    // fromHour === toHour: exact 24h or single-hour window
+    if (fromHour === 0 && toHour === 24) return true;
+    if (fromHour < toHour) return hour >= fromHour && hour < toHour;
+    if (fromHour > toHour) return hour >= fromHour || hour < toHour;
     return true;
   }
 
   /**
-   * Evaluates if system is currently permitted to place a bid according to timing,
-   * daily limits, active hours, and delay rules.
+   * Whether this user may place a bid right now. Account state (suspended, trial over)
+   * is checked first, then the user's own timing rules.
    */
-  public canBidNow(): { allowed: boolean; reason?: string } {
-    const config = this.state.config;
-
-    if (!config.autoBidEnabled) {
-      return { allowed: false, reason: 'AutoBid is currently paused/disabled.' };
+  public canBidNow(userId: string): { allowed: boolean; reason?: string; code?: string } {
+    const user = findUser(userId);
+    if (!user) return { allowed: false, reason: 'Account not found', code: 'no_user' };
+    const account = canUserBid(user);
+    if (!account.allowed) {
+      return {
+        allowed: false,
+        code: account.reason,
+        reason:
+          account.reason === 'suspended'
+            ? 'Account suspended. Contact the administrator.'
+            : 'Your free trial has ended. Contact the administrator to continue bidding.',
+      };
     }
 
-    // 1. Check Active Hours Window
+    const state = this.load(userId);
+    const config = state.config;
+    if (!config.autoBidEnabled) return { allowed: false, reason: 'AutoBid is currently paused/disabled.', code: 'paused' };
+
     const fromHour = config.activeHoursFrom ?? 0;
     const toHour = config.activeHoursTo ?? 24;
     if (!this.isInsideActiveHours(fromHour, toHour)) {
-      return {
-        allowed: false,
-        reason: `[AUTOBID] Paused — outside configured active hours (${fromHour}:00 - ${toHour}:00).`,
-      };
+      return { allowed: false, code: 'outside_hours', reason: `[AUTOBID] Paused — outside configured active hours (${fromHour}:00 - ${toHour}:00).` };
     }
 
-    // 2. Check Daily Bid Limit
     const now = Date.now();
     const startOfDayMs = new Date().setHours(0, 0, 0, 0);
-    const todayBids = this.state.bids.filter(
-      (b) => (b.timestamp || 0) >= startOfDayMs && (b.status === 'SUCCESS' || b.status === 'SIMULATED')
-    ).length;
-
+    const todayBids = state.bids.filter((b) => (b.timestamp || 0) >= startOfDayMs && (b.status === 'SUCCESS' || b.status === 'SIMULATED')).length;
     const maxDaily = config.maxBidsPerDay || 40;
     if (todayBids >= maxDaily) {
-      return {
-        allowed: false,
-        reason: `[AUTOBID] Daily bid limit reached (${todayBids}/${maxDaily} bids placed today).`,
-      };
+      return { allowed: false, code: 'daily_limit', reason: `[AUTOBID] Daily bid limit reached (${todayBids}/${maxDaily} bids placed today).` };
     }
 
-    // 3. Check Delay Between Consecutive Bids
     const delaySeconds = config.delayBetweenBidsSeconds || 0;
-    if (delaySeconds > 0 && this.state.bids.length > 0) {
-      const lastBidTime = this.state.bids[0].timestamp || 0;
-      const elapsedSeconds = (now - lastBidTime) / 1000;
+    if (delaySeconds > 0 && state.bids.length > 0) {
+      const elapsedSeconds = (now - (state.bids[0].timestamp || 0)) / 1000;
       if (elapsedSeconds < delaySeconds) {
-        const remaining = Math.ceil(delaySeconds - elapsedSeconds);
-        return {
-          allowed: false,
-          reason: `[AUTOBID] Delay cooldown in effect (${remaining}s remaining).`,
-        };
+        return { allowed: false, code: 'cooldown', reason: `[AUTOBID] Delay cooldown in effect (${Math.ceil(delaySeconds - elapsedSeconds)}s remaining).` };
       }
     }
 
     return { allowed: true };
   }
 
-  /**
-   * Resolves a single, definitive bid amount and delivery duration
-   * for both Freelancer 'bid_amount' and 'amount' fields.
-   */
-  public resolveBidAmount(project: FreelancerProject): {
-    amount: number;
-    deliveryDays: number;
-    formulaSummary: string;
-  } {
-    const config = this.state.config;
+  public resolveBidAmount(userId: string, project: FreelancerProject): { amount: number; deliveryDays: number; formulaSummary: string } {
+    const config = this.load(userId).config;
     const min = project.budget.minimum || 15;
     const max = project.budget.maximum || 500;
 
@@ -581,7 +571,6 @@ class ProjectStore {
     let days = config.defaultDeliveryDays || 5;
     let formulaSummary = 'No formula set — bids use the low end of the budget.';
 
-    // Check Budget Tiers first if enabled
     if (config.budgetTiersEnabled && config.budgetTiers && config.budgetTiers.length > 0) {
       const matchedTier = config.budgetTiers.find((tier) => max >= tier.minBudget && min <= tier.maxBudget);
       if (matchedTier) {
@@ -605,147 +594,103 @@ class ProjectStore {
           formulaSummary = `Bid = Fixed ${project.budget.currency} ${amount}`;
           break;
         case 'percentage_max':
-        default:
+        default: {
           const pct = config.bidPercentageOfMaxBudget || 85;
           amount = Math.round(max * (pct / 100));
           formulaSummary = `Bid = ${pct}% of Maximum Budget`;
           break;
+        }
       }
     }
 
-    // Normalize to clean round figure
     amount = normalizeBidAmount(amount);
-
-    // Bound within project minimum and maximum
     amount = Math.max(min, Math.min(amount, max));
-
-    return {
-      amount,
-      deliveryDays: days,
-      formulaSummary,
-    };
+    return { amount, deliveryDays: days, formulaSummary };
   }
 
-  /**
-   * Qualification rules live in extension/qualification.js so the dashboard and the
-   * extension can never disagree about why a project was skipped.
-   */
-  public evaluateProject(project: FreelancerProject): {
-    qualified: boolean;
-    reason?: string;
-    matchedTags?: string[];
-    matchedBlacklist?: string[];
-  } {
-    if (this.state.processedProjectIds.includes(project.id)) {
+  public evaluateProject(userId: string, project: FreelancerProject): { qualified: boolean; reason?: string; matchedTags?: string[]; matchedBlacklist?: string[] } {
+    const state = this.load(userId);
+    if (state.processedProjectIds.has(project.id)) {
       return { qualified: false, reason: 'Already processed (Deduplication)' };
     }
-    return sharedEvaluateProject(project, this.state.config);
+    return sharedEvaluateProject(project, state.config);
   }
 
-  /**
-   * Process an incoming project: qualifications, deduplication, proposal generation & auto-bidding
-   */
-  public async processProject(rawProject: FreelancerProject): Promise<FreelancerProject> {
-    const config = this.state.config;
+  // ---------------------------------------------------------------- pipeline
 
-    // 1. DEDUPLICATION GUARD:
-    // If project is already stored in state, NEVER downgrade or overwrite its status!
-    // (This guarantees projects in "Bids Ready" / BID_PLACED stay there and never vanish after 30s)
-    const existing = this.state.projects.find((p) => p.id === rawProject.id);
-    if (existing) {
-      return existing;
-    }
+  public async processProject(userId: string, rawProject: FreelancerProject): Promise<FreelancerProject> {
+    const state = this.load(userId);
+    const config = state.config;
 
-    // If ID was already processed in previous sessions, skip without polluting logs
-    if (this.state.processedProjectIds.includes(rawProject.id)) {
-      return rawProject;
-    }
+    const existing = state.projects.find((p) => p.id === rawProject.id);
+    if (existing) return existing;
+    if (state.processedProjectIds.has(rawProject.id)) return rawProject;
 
     const project = { ...rawProject };
+    state.stats.totalScanned += 1;
+    state.stats.lastPollTimestamp = Date.now();
 
-    this.state.stats.totalScanned += 1;
-    this.state.stats.lastPollTimestamp = Date.now();
-
-    const evaluation = this.evaluateProject(project);
+    const evaluation = this.evaluateProject(userId, project);
 
     if (!evaluation.qualified) {
       project.status = 'SKIPPED';
       project.skipReason = evaluation.reason;
       project.matchedBlacklist = evaluation.matchedBlacklist;
 
-      this.state.stats.totalSkipped += 1;
+      state.stats.totalSkipped += 1;
       const reason = evaluation.reason || '';
-      if (reason.startsWith('Missing mandatory skills')) {
-        this.state.stats.skipBreakdown.missingMandatoryTags += 1;
-      } else if (reason.startsWith('Excluded keyword')) {
-        this.state.stats.skipBreakdown.blacklistedKeyword += 1;
-      } else if (reason.startsWith('Below minimum') || reason.startsWith('Above maximum')) {
-        this.state.stats.skipBreakdown.budgetOutOfRange += 1;
-      } else if (reason.startsWith('Client not ')) {
-        this.state.stats.skipBreakdown.unverifiedPayment += 1;
-      } else if (reason.startsWith('Client rating') || reason.startsWith('Client reviews') || /^Client \w+ below/.test(reason)) {
-        this.state.stats.skipBreakdown.lowRating += 1;
-      } else if (reason.includes('Already processed')) {
-        this.state.stats.skipBreakdown.alreadyProcessed += 1;
-      }
+      if (reason.startsWith('Missing mandatory skills')) state.stats.skipBreakdown.missingMandatoryTags += 1;
+      else if (reason.startsWith('Excluded keyword')) state.stats.skipBreakdown.blacklistedKeyword += 1;
+      else if (reason.startsWith('Below minimum') || reason.startsWith('Above maximum')) state.stats.skipBreakdown.budgetOutOfRange += 1;
+      else if (reason.startsWith('Client not ')) state.stats.skipBreakdown.unverifiedPayment += 1;
+      else if (reason.startsWith('Client rating') || reason.startsWith('Client reviews') || /^Client \w+ below/.test(reason)) state.stats.skipBreakdown.lowRating += 1;
+      else if (reason.includes('Already processed')) state.stats.skipBreakdown.alreadyProcessed += 1;
 
-      this.state.processedProjectIds.push(project.id);
-      this.insertProject(project);
-      this.persist();
+      this.markProcessed(userId, state, project.id);
+      this.insertProject(userId, state, project);
+      this.saveStats(userId, state.stats);
       return project;
     }
 
     project.matchedTags = evaluation.matchedTags;
 
-    // AI relevance gate: only projects that cleared the exact filters reach the model.
     if (config.aiRelevanceEnabled !== false) {
-      const apiKey = getOpenAiKey();
       try {
-        const verdict = await checkRelevance(project, { ...config, openaiApiKey: apiKey });
-        project.relevance = {
-          eligible: verdict.eligible,
-          score: verdict.score,
-          reason: verdict.reason,
-          model: verdict.model,
-          costUSD: verdict.costUSD,
-        };
-        this.state.stats.aiChecks = (this.state.stats.aiChecks || 0) + 1;
-        this.state.stats.aiCostUSD = (this.state.stats.aiCostUSD || 0) + verdict.costUSD;
+        const verdict = await checkRelevance(project, { ...config, openaiApiKey: getOpenAiKey() });
+        project.relevance = { eligible: verdict.eligible, score: verdict.score, reason: verdict.reason, model: verdict.model, costUSD: verdict.costUSD };
+        state.stats.aiChecks = (state.stats.aiChecks || 0) + 1;
+        state.stats.aiCostUSD = (state.stats.aiCostUSD || 0) + verdict.costUSD;
 
         if (!verdict.eligible) {
           project.status = 'SKIPPED';
           project.skipReason = `Not relevant (${verdict.score}/100): ${verdict.reason}`;
-          this.state.stats.totalSkipped += 1;
-          this.state.stats.skipBreakdown.notRelevant = (this.state.stats.skipBreakdown.notRelevant || 0) + 1;
-          this.state.processedProjectIds.push(project.id);
-          this.insertProject(project);
-          this.persist();
+          state.stats.totalSkipped += 1;
+          state.stats.skipBreakdown.notRelevant = (state.stats.skipBreakdown.notRelevant || 0) + 1;
+          this.markProcessed(userId, state, project.id);
+          this.insertProject(userId, state, project);
+          this.saveStats(userId, state.stats);
           return project;
         }
       } catch (error: any) {
-        // Fail closed: never bid on a project the gate could not judge.
         project.status = 'SKIPPED';
         project.skipReason = `AI relevance check failed: ${error.message}`;
-        this.state.stats.totalSkipped += 1;
-        this.state.processedProjectIds.push(project.id);
-        this.insertProject(project);
-        this.persist();
+        state.stats.totalSkipped += 1;
+        this.markProcessed(userId, state, project.id);
+        this.insertProject(userId, state, project);
+        this.saveStats(userId, state.stats);
         return project;
       }
     }
 
-    // Qualified! Marked as BID_PLACED so it permanently resides in "Bids Ready"
-    this.state.stats.totalQualified += 1;
+    state.stats.totalQualified += 1;
     project.status = 'BID_PLACED';
 
-    // Resolve unified bid amount and delivery duration
-    const resolved = this.resolveBidAmount(project);
+    const resolved = this.resolveBidAmount(userId, project);
     project.bidAmount = resolved.amount;
     project.bidPeriodDays = resolved.deliveryDays;
 
     const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
 
-    // If AutoBid is enabled OR generateOnDemand is false, generate proposal right away
     if (config.autoBidEnabled || !config.generateOnDemand) {
       try {
         const aiResult = await generateProposal({
@@ -769,19 +714,13 @@ class ProjectStore {
         project.modelUsed = aiResult.modelUsed;
         project.pricingReasoning = aiResult.pricingReasoning;
         project.generatedAt = Date.now();
-        if (aiResult.recommendedBidAmount && config.useAiPricingAndDays !== false) {
-          project.bidAmount = aiResult.recommendedBidAmount;
-        }
-        if (aiResult.recommendedDeliveryDays && config.useAiPricingAndDays !== false) {
-          project.bidPeriodDays = aiResult.recommendedDeliveryDays;
-        }
+        if (aiResult.recommendedBidAmount && config.useAiPricingAndDays !== false) project.bidAmount = aiResult.recommendedBidAmount;
+        if (aiResult.recommendedDeliveryDays && config.useAiPricingAndDays !== false) project.bidPeriodDays = aiResult.recommendedDeliveryDays;
 
-        const bidGate = this.canBidNow();
+        const bidGate = this.canBidNow(userId);
         if (config.autoBidEnabled && bidGate.allowed && config.dryRunMode) {
-          // Dry run: record a simulated bid so the flow can be reviewed. A real bid is only
-          // logged when the extension reports it submitted; the server never bids itself,
-          // so logging SUCCESS here would count bids that never reached Freelancer.
-          this.state.bids.unshift({
+          // Dry run only. A real bid is logged when the extension reports it submitted.
+          this.pushBid(userId, state, {
             id: `bid-${Date.now()}-${project.id}`,
             projectId: project.id,
             projectTitle: project.title,
@@ -797,7 +736,7 @@ class ProjectStore {
             relevanceScore: project.relevance?.score,
           });
         } else if (config.autoBidEnabled && !bidGate.allowed) {
-          console.log(`[AUTOBID GATE] Project #${project.id} proposal generated, but bidding paused: ${bidGate.reason}`);
+          console.log(`[AUTOBID GATE] ${userId.slice(0, 8)} project #${project.id}: ${bidGate.reason}`);
         }
       } catch (error: any) {
         console.error('Error generating bid for project:', project.id, error);
@@ -805,38 +744,26 @@ class ProjectStore {
       }
     }
 
-    // Deduplication registration
-    this.state.processedProjectIds.push(project.id);
-    this.insertProject(project);
-    this.persist();
-
+    this.markProcessed(userId, state, project.id);
+    this.insertProject(userId, state, project);
+    this.saveStats(userId, state.stats);
     return project;
   }
 
-  /**
-   * On-Demand Proposal Generation: Call OpenAI with AI pricing & days selection
-   */
-  public async generateProposalForProject(projectId: number): Promise<FreelancerProject> {
-    let project = this.state.projects.find((p) => p.id === projectId);
-    if (!project) {
-      throw new Error(`Project #${projectId} not found`);
+  public async generateProposalForProject(userId: string, projectId: number): Promise<FreelancerProject> {
+    const state = this.load(userId);
+    const project = state.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error(`Project #${projectId} not found`);
+
+    if (!project.url || project.url.includes('sample-job')) {
+      project.url = project.id > 40000000
+        ? `https://www.freelancer.com/projects/${project.id}`
+        : `https://www.freelancer.com/search/projects?q=${encodeURIComponent(project.jobs?.[0]?.name || 'web development')}`;
     }
 
-    // Ensure URL is 100% valid and will never 404 on Freelancer.com
-    if (!project.url || project.url.includes('sample-job') || project.id === 38994889) {
-      if (project.id && project.id > 40000000) {
-        project.url = `https://www.freelancer.com/projects/${project.id}`;
-      } else {
-        const topJob = project.jobs?.[0]?.name || 'web development';
-        project.url = `https://www.freelancer.com/search/projects?q=${encodeURIComponent(topJob)}`;
-      }
-    }
+    if (project.generatedProposal && project.generatedProposal.trim() !== '') return project;
 
-    if (project.generatedProposal && project.generatedProposal.trim() !== '') {
-      return project;
-    }
-
-    const config = this.state.config;
+    const config = state.config;
     const chosenModel = config.customOpenAiModel?.trim() || config.openaiModel || 'gpt-4o-mini';
 
     const aiResult = await generateProposal({
@@ -861,187 +788,20 @@ class ProjectStore {
     project.pricingReasoning = aiResult.pricingReasoning;
     project.generatedAt = Date.now();
     project.status = 'BID_PLACED';
-    project.bidPlacedAt = Date.now();
 
-    // Use AI recommended pricing and days if available, or fall back to percentage rule
-    if (aiResult.recommendedBidAmount) {
-      project.bidAmount = aiResult.recommendedBidAmount;
-    } else if (!project.bidAmount) {
-      project.bidAmount = Math.max(
-        project.budget.minimum,
-        Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100))
-      );
+    if (aiResult.recommendedBidAmount) project.bidAmount = aiResult.recommendedBidAmount;
+    else if (!project.bidAmount) {
+      project.bidAmount = Math.max(project.budget.minimum, Math.round(project.budget.maximum * (config.bidPercentageOfMaxBudget / 100)));
     }
+    if (aiResult.recommendedDeliveryDays) project.bidPeriodDays = aiResult.recommendedDeliveryDays;
+    else if (!project.bidPeriodDays) project.bidPeriodDays = config.defaultDeliveryDays;
 
-    if (aiResult.recommendedDeliveryDays) {
-      project.bidPeriodDays = aiResult.recommendedDeliveryDays;
-    } else if (!project.bidPeriodDays) {
-      project.bidPeriodDays = config.defaultDeliveryDays;
-    }
-
-    this.state.stats.totalBidsPlaced += 1;
-
-    const bidLog: BidLog = {
-      id: `bid-${Date.now()}-${project.id}`,
-      projectId: project.id,
-      projectTitle: project.title,
-      clientUsername: project.client?.username || 'client',
-      bidAmount: project.bidAmount,
-      currency: project.budget.currency,
-      deliveryDays: project.bidPeriodDays,
-      proposal: project.generatedProposal,
-      timestamp: Date.now(),
-      status: config.dryRunMode ? 'SIMULATED' : 'SUCCESS',
-    };
-
-    this.state.bids.unshift(bidLog);
-    this.insertProject(project);
-    this.persist();
-
+    this.insertProject(userId, state, project);
     return project;
   }
 
-  private insertProject(project: FreelancerProject) {
-    const existingIndex = this.state.projects.findIndex((p) => p.id === project.id);
-    if (existingIndex >= 0) {
-      this.state.projects[existingIndex] = project;
-    } else {
-      this.state.projects.unshift(project);
-    }
-    // Cap in memory list to latest 250 items
-    if (this.state.projects.length > 250) {
-      this.state.projects = this.state.projects.slice(0, 250);
-    }
-  }
-
-  public async purgeMockAndRefresh(freshProjects: FreelancerProject[]) {
-    // Purge fake mock projects or broken sample-job URLs
-    this.state.projects = this.state.projects.filter(
-      (p) => !p.url?.includes('sample-job') && ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(p.id)
-    );
-    this.state.bids = this.state.bids.filter(
-      (b) => ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(b.projectId)
-    );
-    this.state.processedProjectIds = this.state.processedProjectIds.filter(
-      (id) => ![38994889, 38920141, 38920142, 38920143, 38920144, 38920145].includes(id)
-    );
-
-    // Process incoming live projects
-    for (const p of freshProjects) {
-      await this.processProject(p);
-    }
-    this.persist();
-  }
-
-  private async seedInitialRealProjects() {
-    // Verified real Freelancer active project templates with valid canonical links
-    const realStarterProjects: FreelancerProject[] = [
-      {
-        id: 40715102,
-        title: 'Full Stack React & Node.js Developer for Web Dashboard',
-        description: 'We need an experienced full stack developer proficient in React, Node.js, and TypeScript to build responsive dashboard components, connect to REST endpoints, and implement clean UI styling.',
-        submitDate: Date.now() - 180000,
-        budget: { minimum: 250, maximum: 750, currency: 'USD' },
-        jobs: [
-          { id: 1, name: 'React' },
-          { id: 2, name: 'Node.js' },
-          { id: 3, name: 'TypeScript' },
-          { id: 4, name: 'Web Development' },
-          { id: 5, name: 'JavaScript' },
-        ],
-        client: {
-          id: 819201,
-          username: 'tech_ventures',
-          rating: 4.9,
-          reviewsCount: 34,
-          paymentVerified: true,
-          identityVerified: true,
-          country: 'United States',
-        },
-        status: 'PENDING',
-        url: 'https://www.freelancer.com/projects/react-js/Full-Stack-React-Node-Developer',
-        feedSource: 'rss',
-      },
-      {
-        id: 40714908,
-        title: 'WordPress & WooCommerce Speed Optimization and Plugin Debugging',
-        description: 'Our WooCommerce store is loading slowly on checkout. Need an expert in PHP, WordPress, and database optimization to identify slow MySQL queries, optimize scripts, and improve PageSpeed score.',
-        submitDate: Date.now() - 320000,
-        budget: { minimum: 100, maximum: 350, currency: 'USD' },
-        jobs: [
-          { id: 10, name: 'WordPress' },
-          { id: 11, name: 'WooCommerce' },
-          { id: 12, name: 'PHP' },
-          { id: 13, name: 'HTML' },
-          { id: 14, name: 'CSS' },
-        ],
-        client: {
-          id: 728190,
-          username: 'digital_brands_uk',
-          rating: 4.8,
-          reviewsCount: 19,
-          paymentVerified: true,
-          identityVerified: true,
-          country: 'United Kingdom',
-        },
-        status: 'PENDING',
-        url: 'https://www.freelancer.com/projects/php/WordPress-WooCommerce-Speed-Optimization',
-        feedSource: 'rss',
-      },
-      {
-        id: 40713840,
-        title: 'Custom Shopify Liquid Theme Modifications and Cart API Integration',
-        description: 'Looking for a Shopify specialist to customize our Dawn theme with a custom product bundle builder using JavaScript and Shopify Cart Ajax API. Must follow Shopify best practices.',
-        submitDate: Date.now() - 510000,
-        budget: { minimum: 150, maximum: 450, currency: 'USD' },
-        jobs: [
-          { id: 20, name: 'Shopify' },
-          { id: 21, name: 'JavaScript' },
-          { id: 22, name: 'HTML' },
-          { id: 23, name: 'CSS' },
-        ],
-        client: {
-          id: 641829,
-          username: 'retail_flow',
-          rating: 5.0,
-          reviewsCount: 12,
-          paymentVerified: true,
-          identityVerified: true,
-          country: 'Australia',
-        },
-        status: 'PENDING',
-        url: 'https://www.freelancer.com/projects/shopify-templates/Custom-Shopify-Liquid-Theme-Modifications',
-        feedSource: 'rss',
-      },
-      {
-        id: 40712950,
-        title: 'Python Web Scraping and Data Pipeline Automation',
-        description: 'Need a Python script to scrape product catalog data, normalize fields, and output structured JSON/CSV for our database ingestion pipeline. BeautifulSoup or Scrapy preferred.',
-        submitDate: Date.now() - 720000,
-        budget: { minimum: 80, maximum: 200, currency: 'USD' },
-        jobs: [
-          { id: 30, name: 'Python' },
-          { id: 31, name: 'Web Scraping' },
-          { id: 32, name: 'Data Processing' },
-        ],
-        client: {
-          id: 519280,
-          username: 'analytics_pro',
-          rating: 4.7,
-          reviewsCount: 8,
-          paymentVerified: true,
-          identityVerified: false,
-          country: 'Canada',
-        },
-        status: 'PENDING',
-        url: 'https://www.freelancer.com/projects/python/Python-Web-Scraping-Data-Pipeline',
-        feedSource: 'rss',
-      },
-    ];
-
-    for (const p of realStarterProjects) {
-      await this.processProject(p);
-    }
+  public async purgeMockAndRefresh(userId: string, freshProjects: FreelancerProject[]) {
+    for (const p of freshProjects) await this.processProject(userId, p);
   }
 }
 

@@ -1,13 +1,10 @@
 /**
- * Single-admin authentication, extension tokens, and encrypted secrets.
+ * Crypto primitives, sessions, login rate limiting, and the shared encrypted secrets.
  *
- * Password: ADMIN_PASSWORD env, hashed with scrypt at boot; a password changed from the
- * admin page is stored hashed in data/auth.json (Render's disk is ephemeral, so the env
- * var remains the durable source and the page tells the user to update it).
- * Session: HMAC-signed cookie, no server-side session store.
- * Extension token: random, shown once, stored hashed.
- * Secrets: AES-256-GCM with a key derived from SESSION_SECRET, so a leaked data file or
- * config dump does not leak the OpenAI key.
+ * Accounts live in the users table (users.ts). This module holds what is genuinely global:
+ * password hashing, the HMAC-signed session cookie (payload carries the user id, no
+ * server-side session store), the login rate limiter, and the AES-256-GCM secret store
+ * keyed from SESSION_SECRET, which holds the one admin-managed OpenAI key every user shares.
  */
 
 import crypto from 'crypto';
@@ -23,11 +20,7 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 interface AuthState {
-  passwordHash?: string; // "scrypt$<saltB64>$<hashB64>"
   sessionSecret?: string;
-  extensionTokenHash?: string; // sha256 hex
-  extensionTokenCreatedAt?: number;
-  extensionTokenLastUsedAt?: number;
   secrets: Record<string, string>; // name -> "<ivB64>.<tagB64>.<cipherB64>"
 }
 
@@ -54,37 +47,18 @@ function persist() {
 
 // ---------------------------------------------------------------- password
 
-function hashPassword(password: string): string {
+export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16);
   const hash = crypto.scryptSync(password, salt, 64);
   return `scrypt$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
 
-function verifyPassword(password: string, stored: string): boolean {
+export function verifyPassword(password: string, stored: string): boolean {
   const [scheme, saltB64, hashB64] = stored.split('$');
   if (scheme !== 'scrypt' || !saltB64 || !hashB64) return false;
   const expected = Buffer.from(hashB64, 'base64');
   const actual = crypto.scryptSync(password, Buffer.from(saltB64, 'base64'), expected.length);
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
-}
-
-export function isPasswordConfigured(): boolean {
-  return !!(state.passwordHash || process.env.ADMIN_PASSWORD);
-}
-
-export function checkPassword(password: string): boolean {
-  if (typeof password !== 'string' || !password) return false;
-  if (state.passwordHash) return verifyPassword(password, state.passwordHash);
-  const envPassword = process.env.ADMIN_PASSWORD;
-  if (!envPassword) return false;
-  const a = Buffer.from(password);
-  const b = Buffer.from(envPassword);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-export function setPassword(newPassword: string) {
-  state.passwordHash = hashPassword(newPassword);
-  persist();
 }
 
 // ---------------------------------------------------------------- sessions
@@ -100,22 +74,49 @@ function sessionSecret(): Buffer {
   return crypto.createHash('sha256').update(state.sessionSecret).digest();
 }
 
-function sign(payload: string): string {
+export function sign(payload: string): string {
   return crypto.createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
 }
 
-export function issueSessionCookie(): { name: string; value: string; maxAgeMs: number } {
-  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + SESSION_TTL_MS, n: crypto.randomBytes(8).toString('hex') })).toString('base64url');
+export function issueSessionCookie(userId: string): { name: string; value: string; maxAgeMs: number } {
+  const payload = Buffer.from(
+    JSON.stringify({ uid: userId, exp: Date.now() + SESSION_TTL_MS, n: crypto.randomBytes(8).toString('hex') })
+  ).toString('base64url');
   return { name: SESSION_COOKIE, value: `${payload}.${sign(payload)}`, maxAgeMs: SESSION_TTL_MS };
 }
 
-export function verifySessionCookie(raw: string | undefined): boolean {
-  if (!raw) return false;
+/** Returns the user id carried by a valid, unexpired cookie, or null. */
+export function verifySessionCookie(raw: string | undefined): string | null {
+  if (!raw) return null;
   const [payload, sig] = raw.split('.');
-  if (!payload || !sig) return false;
+  if (!payload || !sig) return null;
   const expected = sign(payload);
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    if (typeof data.exp !== 'number' || data.exp <= Date.now()) return null;
+    return typeof data.uid === 'string' && data.uid ? data.uid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Short-lived signed value for OAuth state (CSRF). Same signing key as sessions.
+ */
+export function issueSignedState(ttlMs = 10 * 60 * 1000): string {
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + ttlMs, n: crypto.randomBytes(12).toString('hex') })).toString('base64url');
+  return `${payload}.${sign(payload)}`;
+}
+
+export function verifySignedState(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const [payload, sig] = raw.split('.');
+  if (!payload || !sig) return false;
+  const a = Buffer.from(sig);
+  const b = Buffer.from(sign(payload));
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
@@ -140,45 +141,18 @@ export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 
 // ---------------------------------------------------------------- extension token
 
-function sha256(s: string): string {
+export function sha256(s: string): string {
   return crypto.createHash('sha256').update(s).digest('hex');
 }
 
-export function generateExtensionToken(): string {
-  const token = `fab_${crypto.randomBytes(32).toString('base64url')}`;
-  state.extensionTokenHash = sha256(token);
-  state.extensionTokenCreatedAt = Date.now();
-  state.extensionTokenLastUsedAt = undefined;
-  persist();
-  return token;
+export function newExtensionToken(): string {
+  return `fab_${crypto.randomBytes(32).toString('base64url')}`;
 }
 
-export function revokeExtensionToken() {
-  state.extensionTokenHash = undefined;
-  state.extensionTokenCreatedAt = undefined;
-  state.extensionTokenLastUsedAt = undefined;
-  persist();
-}
-
-export function verifyExtensionToken(token: string | undefined): boolean {
-  if (!token || !state.extensionTokenHash) return false;
-  const a = Buffer.from(sha256(token));
-  const b = Buffer.from(state.extensionTokenHash);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  // Throttle the last-used write so a 20s heartbeat does not rewrite the file each time.
-  if (!state.extensionTokenLastUsedAt || Date.now() - state.extensionTokenLastUsedAt > 60_000) {
-    state.extensionTokenLastUsedAt = Date.now();
-    persist();
-  }
-  return true;
-}
-
-export function extensionTokenStatus() {
-  return {
-    configured: !!state.extensionTokenHash,
-    createdAt: state.extensionTokenCreatedAt || null,
-    lastUsedAt: state.extensionTokenLastUsedAt || null,
-  };
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
 // ---------------------------------------------------------------- secrets

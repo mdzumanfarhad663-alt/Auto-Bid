@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { PublicUser } from '../types.ts';
 
 interface Props {
   onAuthenticated: (user: PublicUser) => void;
   googleEnabled: boolean;
-  onSwitchToRegister: () => void;
+  onSwitchToLogin: () => void;
 }
 
 const GoogleIcon: React.FC = () => (
@@ -17,23 +17,22 @@ const GoogleIcon: React.FC = () => (
   </svg>
 );
 
-export const LoginPage: React.FC<Props> = ({ onAuthenticated, googleEnabled, onSwitchToRegister }) => {
+export const RegisterPage: React.FC<Props> = ({ onAuthenticated, googleEnabled, onSwitchToLogin }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const urlError = new URLSearchParams(window.location.search).get('error');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -49,18 +48,16 @@ export const LoginPage: React.FC<Props> = ({ onAuthenticated, googleEnabled, onS
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8 space-y-5 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center">
-            <Lock className="h-5 w-5 text-blue-400" />
+          <div className="h-10 w-10 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-emerald-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">Freelancer AutoBid</h1>
-            <p className="text-xs text-slate-400">Sign in to your account</p>
+            <h1 className="text-lg font-bold text-white">Start your free trial</h1>
+            <p className="text-xs text-slate-400">3 days, no card required</p>
           </div>
         </div>
 
-        {(error || urlError) && (
-          <div className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800 rounded-lg px-3 py-2">{error || urlError}</div>
-        )}
+        {error && <div className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800 rounded-lg px-3 py-2">{error}</div>}
 
         {googleEnabled && (
           <>
@@ -79,41 +76,50 @@ export const LoginPage: React.FC<Props> = ({ onAuthenticated, googleEnabled, onS
         )}
 
         <div>
+          <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
+          <input
+            type="text"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+        <div>
           <label className="text-xs font-semibold text-slate-300 block mb-1">Email</label>
           <input
             type="email"
-            autoFocus
             autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
           />
         </div>
         <div>
           <label className="text-xs font-semibold text-slate-300 block mb-1">Password</label>
           <input
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
           />
+          <p className="text-[11px] text-slate-500 mt-1">At least 10 characters.</p>
         </div>
 
         <button
           type="submit"
-          disabled={busy || !email || !password}
-          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition"
+          disabled={busy || !email || password.length < 10}
+          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold transition"
         >
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? 'Creating account…' : 'Create account'}
         </button>
 
         <p className="text-xs text-slate-400 text-center">
-          New here?{' '}
-          <button type="button" onClick={onSwitchToRegister} className="text-blue-400 hover:text-blue-300 font-semibold">
-            Create an account
-          </button>{' '}
-          — 3 days free.
+          Already have an account?{' '}
+          <button type="button" onClick={onSwitchToLogin} className="text-blue-400 hover:text-blue-300 font-semibold">
+            Sign in
+          </button>
         </p>
       </form>
     </div>

@@ -21,36 +21,29 @@ import { CodeExportPage } from './pages/CodeExportPage.tsx';
 import { SetupGuidePage } from './pages/SetupGuidePage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-import { FilterConfig, FreelancerProject, DEFAULT_CONFIG } from './types.ts';
+import { RegisterPage } from './pages/RegisterPage.tsx';
+import { AccountSettingsPage } from './pages/AccountSettingsPage.tsx';
+import { FilterConfig, FreelancerProject, DEFAULT_CONFIG, PublicUser } from './types.ts';
 
 export default function App() {
-  // Immediately read from localStorage on initial render to prevent flickering to defaults
-  const [config, setConfig] = useState<FilterConfig>(() => {
-    try {
-      const cached = localStorage.getItem('freelancer_autobid_config');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === 'object') {
-          return { ...DEFAULT_CONFIG, ...parsed };
-        }
-      }
-    } catch (e) {}
-    return DEFAULT_CONFIG;
-  });
+  const [config, setConfig] = useState<FilterConfig>(DEFAULT_CONFIG);
 
   const [isPolling, setIsPolling] = useState(false);
   const [pollCountdown, setPollCountdown] = useState<number>(30);
 
-  // null = unknown (checking), false = show login, true = signed in
+  // null = checking, undefined-user = show login/register, PublicUser = signed in
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [passwordConfigured, setPasswordConfigured] = useState(true);
+  const [currentUser, setCurrentUser] = useState<PublicUser | null>(null);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
 
   useEffect(() => {
     fetch('/api/auth/me')
       .then((r) => r.json())
       .then((d) => {
         setAuthed(!!d.authenticated);
-        setPasswordConfigured(d.passwordConfigured !== false);
+        setCurrentUser(d.user || null);
+        setGoogleEnabled(!!d.googleEnabled);
       })
       .catch(() => setAuthed(false));
   }, []);
@@ -81,72 +74,26 @@ export default function App() {
     }
   }, []);
 
+  // The server (one SQLite row per user) is the sole source of truth for config now that
+  // every account is isolated. A shared localStorage key here would leak one account's
+  // settings into another's on the same browser, so nothing is cached or written back.
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, projectsRes] = await Promise.all([
-        fetch('/api/config'),
-        fetch('/api/projects'),
-      ]);
-
+      const configRes = await fetch('/api/config');
       if (configRes.ok) {
         const serverConfig: FilterConfig = await configRes.json();
-        
-        let clientSavedConfig: Partial<FilterConfig> | null = null;
-        try {
-          const cached = localStorage.getItem('freelancer_autobid_config');
-          if (cached) {
-            clientSavedConfig = JSON.parse(cached);
-          }
-        } catch (e) {}
-
-        // Check if client has custom settings (API key, custom skills, prompt, portfolio) that the server lacks
-        const serverMissingCustom =
-          (!serverConfig.openaiApiKey && !!clientSavedConfig?.openaiApiKey) ||
-          (clientSavedConfig?.portfolioLinks && clientSavedConfig.portfolioLinks.length > 0 && (!serverConfig.portfolioLinks || serverConfig.portfolioLinks.length === 0)) ||
-          (clientSavedConfig?.mandatorySkills && clientSavedConfig.mandatorySkills.length > 0 && JSON.stringify(serverConfig.mandatorySkills) !== JSON.stringify(clientSavedConfig.mandatorySkills));
-
-        let finalConfig: FilterConfig;
-        if (clientSavedConfig && serverMissingCustom) {
-          // Re-hydrate the server with client's saved configuration from localStorage
-          finalConfig = { ...DEFAULT_CONFIG, ...serverConfig, ...clientSavedConfig };
-          fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(finalConfig),
-          }).catch((err) => console.warn('[Config Sync] Auto-rehydration notice:', err));
-        } else {
-          finalConfig = { ...DEFAULT_CONFIG, ...(clientSavedConfig || {}), ...serverConfig };
-        }
-
-        setConfig(finalConfig);
-        try {
-          localStorage.setItem('freelancer_autobid_config', JSON.stringify(finalConfig));
-        } catch (err) {}
+        setConfig({ ...DEFAULT_CONFIG, ...serverConfig });
       }
-
       // Opening project tabs belongs to the extension alone. It owns chrome.tabs, so it is
       // the only side that can run a one-at-a-time queue and close a tab when the bid ends.
-      // The dashboard opening its own tabs bypassed that queue and raced it.
     } catch (e) {
       console.warn('Failed to fetch initial sync data:', e);
     }
   }, []);
 
   useEffect(() => {
+    if (!authed) return;
     fetchData();
-
-    // Listen for storage changes across tabs to keep all dashboard windows in sync
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'freelancer_autobid_config' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (parsed && typeof parsed === 'object') {
-            setConfig((prev) => ({ ...prev, ...parsed }));
-          }
-        } catch (err) {}
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
 
     const intervalSecs = config.pollIntervalSeconds || 30;
     setPollCountdown(intervalSecs);
@@ -161,20 +108,12 @@ export default function App() {
       });
     }, 1000);
 
-    return () => {
-      clearInterval(ticker);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [fetchData, config.pollIntervalSeconds]);
+    return () => clearInterval(ticker);
+  }, [authed, fetchData, config.pollIntervalSeconds]);
 
   // Update configuration handler
   const handleUpdateConfig = async (updated: Partial<FilterConfig>) => {
     try {
-      const mergedConfig = { ...config, ...updated };
-      try {
-        localStorage.setItem('freelancer_autobid_config', JSON.stringify(mergedConfig));
-      } catch (err) {}
-
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -183,9 +122,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setConfig(data.config);
-        try {
-          localStorage.setItem('freelancer_autobid_config', JSON.stringify(data.config));
-        } catch (err) {}
       }
     } catch (e) {
       console.error('Failed to update config', e);
@@ -211,8 +147,20 @@ export default function App() {
   if (authed === null) {
     return <div className="min-h-screen bg-slate-950" />;
   }
-  if (!authed) {
-    return <LoginPage passwordConfigured={passwordConfigured} onAuthenticated={() => { setAuthed(true); fetchData(); }} />;
+  if (!authed || !currentUser) {
+    return authScreen === 'register' ? (
+      <RegisterPage
+        googleEnabled={googleEnabled}
+        onSwitchToLogin={() => setAuthScreen('login')}
+        onAuthenticated={(u) => { setCurrentUser(u); setAuthed(true); }}
+      />
+    ) : (
+      <LoginPage
+        googleEnabled={googleEnabled}
+        onSwitchToRegister={() => setAuthScreen('register')}
+        onAuthenticated={(u) => { setCurrentUser(u); setAuthed(true); }}
+      />
+    );
   }
 
   return (
@@ -226,6 +174,7 @@ export default function App() {
               onPollNow={handlePollNow}
               isPolling={isPolling}
               pollSecondsRemaining={pollCountdown}
+              currentUser={currentUser}
             />
           }
         >
@@ -244,7 +193,8 @@ export default function App() {
           <Route path="/nda-ip-signing" element={<NdaIpSigningPage />} />
           <Route path="/code" element={<CodeExportPage />} />
           <Route path="/guide" element={<SetupGuidePage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/account" element={<AccountSettingsPage user={currentUser} onUserUpdated={setCurrentUser} />} />
+          {currentUser.role === 'admin' && <Route path="/admin" element={<AdminPage currentUserId={currentUser.id} />} />}
           {/* Catch-all fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>

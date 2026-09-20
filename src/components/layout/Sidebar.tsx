@@ -17,14 +17,17 @@ import {
   X,
   CheckCircle2,
   Bot,
-  ShieldCheck
+  ShieldCheck,
+  UserCog
 } from 'lucide-react';
+import { PublicUser } from '../../types.ts';
 
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   extensionStatus?: 'idle' | 'running' | 'polling';
   extensionVersion?: string;
+  currentUser?: PublicUser | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   extensionStatus = 'idle',
   extensionVersion = '',
+  currentUser,
 }) => {
   const navGroups = [
     {
@@ -118,10 +122,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: BookOpen,
         },
         {
-          name: 'Admin',
-          to: '/admin',
-          icon: ShieldCheck,
+          name: 'Account',
+          to: '/account',
+          icon: UserCog,
         },
+        ...(currentUser?.role === 'admin'
+          ? [{ name: 'Admin', to: '/admin', icon: ShieldCheck }]
+          : []),
       ],
     },
   ];

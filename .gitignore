@@ -9,3 +9,7 @@ coverage/
 
 # Admin password hash, extension token hash and encrypted secrets. Never commit.
 data/auth.json
+
+# User accounts, password hashes, per-user config/projects/bids. Never commit.
+data/autobid.db
+data/autobid.db-*
