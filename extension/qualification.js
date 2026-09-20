@@ -376,3 +376,33 @@ export function evaluateProject(project, config, options = {}) {
 
   return { qualified: true, matchedTags };
 }
+
+/**
+ * Picks the portfolio links to insert into a proposal for a given project.
+ * A category matches when any of its keywords appears (case-insensitive) in the
+ * project's title or its listed skills. The first matching category with at least
+ * one link wins; otherwise falls back to the general portfolioLinks list.
+ */
+export function selectPortfolioLinks(config, project) {
+  const categories = Array.isArray(config?.portfolioCategories) ? config.portfolioCategories : [];
+  const fallback = Array.isArray(config?.portfolioLinks) ? config.portfolioLinks : [];
+
+  if (categories.length === 0 || !project) return fallback;
+
+  const title = String(project.title || '').toLowerCase();
+  const skills = (project.jobs || project.skills || [])
+    .map((j) => (typeof j === 'string' ? j : j?.name || ''))
+    .join(' ')
+    .toLowerCase();
+  const haystack = `${title} ${skills}`;
+
+  for (const cat of categories) {
+    const keywords = Array.isArray(cat?.keywords) ? cat.keywords : [];
+    const links = Array.isArray(cat?.links) ? cat.links : [];
+    if (links.length === 0) continue;
+    const matched = keywords.some((kw) => kw && haystack.includes(String(kw).toLowerCase()));
+    if (matched) return links;
+  }
+
+  return fallback;
+}

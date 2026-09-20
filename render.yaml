@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: auto-bid
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/auth/me
+    disk:
+      # Persistent disk mounted where the SQLite database lives (src/services/db.ts).
+      # Without this, every deploy/restart runs on a fresh ephemeral filesystem and
+      # ALL user accounts, settings, and API keys are wiped. With it, `data/autobid.db`
+      # survives redeploys, restarts, and instance moves, so nothing is lost on update.
+      name: autobid-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
+      - key: AUTOBID_DB_PATH
+        value: /opt/render/project/src/data/autobid.db

@@ -13,7 +13,7 @@
  * 6. OpenAI proposal generation adhering to strict custom markdown rules.
  */
 
-import { buildActiveFeedUrl, mapActiveProject, evaluateProject } from './qualification.js';
+import { buildActiveFeedUrl, mapActiveProject, evaluateProject, selectPortfolioLinks } from './qualification.js';
 import { checkRelevance } from './relevance.js';
 import { buildMyBidsUrl, mapOutcomes, isFinalOutcome } from './outcomes.js';
 
@@ -1295,7 +1295,7 @@ async function generateAiProposal(project, config) {
   }
 
   const skillsList = (config.freelancerSkills || []).join(', ');
-  const portfolioList = (config.portfolioLinks || []).slice(0, 2).join(' | ');
+  const portfolioList = selectPortfolioLinks(config, project).slice(0, 2).join(' | ');
 
   let systemInstruction = config.systemPrompt || DEFAULT_CONFIG.systemPrompt;
   systemInstruction = systemInstruction

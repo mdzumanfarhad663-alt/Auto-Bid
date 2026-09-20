@@ -1,16 +1,17 @@
 import React from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { SettingsPage } from '../components/SettingsPage.tsx';
-import { FilterConfig, FreelancerProject } from '../types.ts';
+import { FilterConfig, FreelancerProject, PublicUser } from '../types.ts';
 
 interface OutletContextType {
   config: FilterConfig;
+  currentUser: PublicUser;
   onUpdateConfig: (updated: Partial<FilterConfig>) => void;
   onOpenTester: (project?: FreelancerProject) => void;
 }
 
 export const ProjectFiltersPage: React.FC = () => {
-  const { config, onUpdateConfig, onOpenTester } = useOutletContext<OutletContextType>();
+  const { config, currentUser, onUpdateConfig, onOpenTester } = useOutletContext<OutletContextType>();
 
   return (
     <div id="project-filters-page" className="space-y-6">
@@ -25,6 +26,7 @@ export const ProjectFiltersPage: React.FC = () => {
 
       <SettingsPage
         config={config}
+        currentUser={currentUser}
         onSave={onUpdateConfig}
         onOpenTester={() => onOpenTester()}
         onClearHistory={() => {}}

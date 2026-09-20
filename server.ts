@@ -8,6 +8,7 @@ import { projectStore, getExtensionVersion } from './src/services/store.ts';
 import { generateProposal } from './src/services/openai.ts';
 import { runPollCycleFor, startBackgroundPoller, fetchFreelancerActiveProjects } from './src/services/freelancer-poller.ts';
 import { checkRelevance } from './extension/relevance.js';
+import { selectPortfolioLinks } from './extension/qualification.js';
 import {
   issueSessionCookie,
   verifySessionCookie,
@@ -576,7 +577,7 @@ app.post('/api/generate-bid', async (req, res) => {
       clientCountry: project.client?.country,
       clientName: project.client?.username,
       mySkills: config.freelancerSkills,
-      portfolioLinks: config.portfolioLinks,
+      portfolioLinks: selectPortfolioLinks(config, project),
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: customPrompt || config.systemPrompt,
       customApiKey: customApiKey || getOpenAiKey(),

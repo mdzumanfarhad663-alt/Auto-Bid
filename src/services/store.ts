@@ -7,6 +7,7 @@ import {
   CURRENCY_RATES_TO_USD as SHARED_RATES,
   convertToUSD as sharedConvertToUSD,
   evaluateProject as sharedEvaluateProject,
+  selectPortfolioLinks,
 } from '../../extension/qualification.js';
 import { checkRelevance } from '../../extension/relevance.js';
 import { getOpenAiKey, setSecret, hasSecret } from './auth.ts';
@@ -701,7 +702,7 @@ class ProjectStore {
           clientCountry: project.client.country,
           clientName: project.client.username,
           mySkills: config.freelancerSkills,
-          portfolioLinks: config.portfolioLinks,
+          portfolioLinks: selectPortfolioLinks(config, project),
           ctaQuestion: config.ctaQuestion,
           customSystemPrompt: config.systemPrompt,
           customApiKey: getOpenAiKey(),
@@ -774,7 +775,7 @@ class ProjectStore {
       clientCountry: project.client?.country,
       clientName: project.client?.username,
       mySkills: config.freelancerSkills,
-      portfolioLinks: config.portfolioLinks,
+      portfolioLinks: selectPortfolioLinks(config, project),
       ctaQuestion: config.ctaQuestion,
       customSystemPrompt: config.systemPrompt,
       customApiKey: getOpenAiKey(),

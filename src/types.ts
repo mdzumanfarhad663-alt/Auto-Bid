@@ -10,6 +10,13 @@ export type ClientVerificationKey =
 
 export type CategoryRatingKey = 'clarity_spec' | 'communication' | 'payment_prom' | 'professionalism' | 'hire_again';
 
+export interface PortfolioCategory {
+  id: string;
+  name: string; // e.g. "WordPress", "Shopify"
+  keywords: string[]; // matched (case-insensitive) against project title/skills
+  links: string[];
+}
+
 export type ListingTypeKey =
   | 'featured'
   | 'sealed'
@@ -106,7 +113,8 @@ export interface FilterConfig {
   minClientCategoryRatings: Partial<Record<CategoryRatingKey, number>>; // 0 or absent skips none
   minClientReviews: number;
   freelancerSkills: string[];
-  portfolioLinks: string[];
+  portfolioLinks: string[]; // General fallback links, used when no category matches the project
+  portfolioCategories?: PortfolioCategory[]; // Per-project-type link sets, e.g. WordPress, Shopify
   ctaQuestion: string;
   systemPrompt: string;
   aiRelevanceEnabled: boolean; // Send filter survivors to the model before bidding
@@ -189,6 +197,7 @@ export const DEFAULT_CONFIG: FilterConfig = {
   minClientReviews: 0,
   freelancerSkills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'WordPress', 'Shopify', 'TailwindCSS', 'REST APIs', 'PHP', 'Python'],
   portfolioLinks: ['https://github.com/my-profile', 'https://myportfolio.dev'],
+  portfolioCategories: [],
   ctaQuestion: '',
   systemPrompt: `OUTPUT FORMAT (follow exactly):
 

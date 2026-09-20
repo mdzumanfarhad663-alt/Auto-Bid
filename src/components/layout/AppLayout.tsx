@@ -80,6 +80,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <Outlet
             context={{
               config,
+              currentUser,
               onUpdateConfig,
               onPollNow,
               isPolling,

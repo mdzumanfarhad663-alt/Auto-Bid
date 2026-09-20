@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FilterConfig, DEFAULT_CONFIG, ClientVerificationKey, CategoryRatingKey, ListingTypeKey } from '../types.ts';
+import React, { useState, useEffect, useRef } from 'react';
+import { FilterConfig, DEFAULT_CONFIG, ClientVerificationKey, CategoryRatingKey, ListingTypeKey, PublicUser } from '../types.ts';
 import {
   CLIENT_VERIFICATION_KEYS,
   CLIENT_VERIFICATION_LABELS,
@@ -24,15 +24,9 @@ import {
   Check, 
   Plus, 
   X, 
-  Download, 
-  Upload, 
-  RotateCcw, 
-  Cpu, 
-  Bot, 
-  Clock, 
-  Radio, 
-  Bell, 
-  Volume2, 
+  Download,
+  Upload,
+  RotateCcw,
   Trash2,
   ExternalLink,
   HelpCircle,
@@ -44,6 +38,7 @@ import {
 
 interface SettingsPageProps {
   config: FilterConfig;
+  currentUser: PublicUser;
   onSave: (updated: Partial<FilterConfig>) => void;
   onOpenTester: () => void;
   onClearHistory: () => void;
@@ -65,18 +60,21 @@ const POPULAR_OPENAI_MODELS = [
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   config,
+  currentUser,
   onSave,
   onOpenTester,
   onClearHistory,
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
+
   // Always initialize and sync with latest config
   const [formData, setFormData] = useState<FilterConfig>({ ...config });
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'countries' | 'filters' | 'budget' | 'rules' | 'autobid' | 'ai' | 'profile' | 'backup'>('all');
-  
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'countries' | 'filters' | 'budget' | 'rules' | 'ai' | 'profile' | 'backup'>('all');
+
   const [showApiKey, setShowApiKey] = useState(false);
   const [verifyingKey, setVerifyingKey] = useState(false);
   const [keyStatus, setKeyStatus] = useState<{ valid: boolean; message: string } | null>(null);
-  
+
   const [newSkill, setNewSkill] = useState('');
   const [newNegative, setNewNegative] = useState('');
   const [newCountry, setNewCountry] = useState('');
@@ -85,17 +83,33 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [newFreelancerSkill, setNewFreelancerSkill] = useState('');
   const [newPortfolio, setNewPortfolio] = useState('');
   const [newCurrency, setNewCurrency] = useState('');
-  
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryLinkDraft, setNewCategoryLinkDraft] = useState<Record<string, string>>({});
+  const [newCategoryKeywordDraft, setNewCategoryKeywordDraft] = useState<Record<string, string>>({});
+
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
-  // Keep internal form state synchronized with prop changes (fixes stale config on reload)
+  // Tracks the last config snapshot we know the form matches, so a background
+  // refetch (polling) never clobbers edits the user hasn't saved yet.
+  const lastSyncedConfigRef = useRef<string>(JSON.stringify(config));
+
+  // Keep internal form state synchronized with prop changes, but only when there
+  // are no unsaved local edits pending — otherwise a periodic background refresh
+  // (e.g. the poll-interval refetch in App.tsx) would silently wipe out changes
+  // the user made seconds before clicking "Save All Settings".
   useEffect(() => {
-    setFormData({ ...config });
+    const incoming = JSON.stringify(config);
+    if (JSON.stringify(formData) === lastSyncedConfigRef.current) {
+      setFormData({ ...config });
+    }
+    lastSyncedConfigRef.current = incoming;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
   const handleSave = () => {
     onSave(formData);
+    lastSyncedConfigRef.current = JSON.stringify(formData);
     setSaveSuccess(true);
     setSaveMessage('All settings, custom markdown rules, and API keys saved successfully!');
     setTimeout(() => {
@@ -284,6 +298,77 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     });
   };
 
+  // Add / Remove Portfolio Categories (e.g. WordPress, Shopify — each with its own link set)
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const current = formData.portfolioCategories || [];
+    if (current.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      setNewCategoryName('');
+      return;
+    }
+    setFormData({
+      ...formData,
+      portfolioCategories: [
+        ...current,
+        { id: `cat_${Date.now()}`, name, keywords: [name], links: [] },
+      ],
+    });
+    setNewCategoryName('');
+  };
+
+  const handleRemoveCategory = (id: string) => {
+    setFormData({
+      ...formData,
+      portfolioCategories: (formData.portfolioCategories || []).filter((c) => c.id !== id),
+    });
+  };
+
+  const handleAddCategoryLink = (id: string) => {
+    const link = (newCategoryLinkDraft[id] || '').trim();
+    if (!link) return;
+    setFormData({
+      ...formData,
+      portfolioCategories: (formData.portfolioCategories || []).map((c) =>
+        c.id === id && !c.links.includes(link) ? { ...c, links: [...c.links, link] } : c
+      ),
+    });
+    setNewCategoryLinkDraft({ ...newCategoryLinkDraft, [id]: '' });
+  };
+
+  const handleRemoveCategoryLink = (id: string, link: string) => {
+    setFormData({
+      ...formData,
+      portfolioCategories: (formData.portfolioCategories || []).map((c) =>
+        c.id === id ? { ...c, links: c.links.filter((l) => l !== link) } : c
+      ),
+    });
+  };
+
+  const handleAddCategoryKeyword = (id: string) => {
+    const kw = (newCategoryKeywordDraft[id] || '').trim();
+    if (!kw) return;
+    setFormData({
+      ...formData,
+      portfolioCategories: (formData.portfolioCategories || []).map((c) =>
+        c.id === id && !c.keywords.some((k) => k.toLowerCase() === kw.toLowerCase())
+          ? { ...c, keywords: [...c.keywords, kw] }
+          : c
+      ),
+    });
+    setNewCategoryKeywordDraft({ ...newCategoryKeywordDraft, [id]: '' });
+  };
+
+  const handleRemoveCategoryKeyword = (id: string, kw: string) => {
+    setFormData({
+      ...formData,
+      portfolioCategories: (formData.portfolioCategories || []).map((c) =>
+        c.id === id ? { ...c, keywords: c.keywords.filter((k) => k !== kw) } : c
+      ),
+    });
+  };
+
   // Add / Remove Currencies
   const handleAddCurrency = (e: React.FormEvent) => {
     e.preventDefault();
@@ -451,26 +536,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         >
           📝 Markdown Proposal Rules
         </button>
-        <button
-          onClick={() => setActiveSubTab('autobid')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition ${
-            activeSubTab === 'autobid'
-              ? 'bg-slate-800 text-sky-400 border border-slate-700'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          🤖 Hands-Free Auto-Bid
-        </button>
-        <button
-          onClick={() => setActiveSubTab('ai')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition ${
-            activeSubTab === 'ai'
-              ? 'bg-slate-800 text-sky-400 border border-slate-700'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          🔑 OpenAI API Key &amp; Models
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveSubTab('ai')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition ${
+              activeSubTab === 'ai'
+                ? 'bg-slate-800 text-sky-400 border border-slate-700'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🔑 OpenAI API Key &amp; Models
+          </button>
+        )}
         <button
           onClick={() => setActiveSubTab('profile')}
           className={`px-3 py-1.5 rounded-lg font-medium transition ${
@@ -493,8 +570,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </button>
       </div>
 
-      {/* SECTION 1: OpenAI API Key & Model */}
-      {(activeSubTab === 'all' || activeSubTab === 'ai') && (
+      {/* SECTION 1: OpenAI API Key & Model — admin-only, regular users never see or control the shared key/model */}
+      {isAdmin && (activeSubTab === 'all' || activeSubTab === 'ai') && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -846,111 +923,6 @@ Are you currently using any caching plugin or CDN on the site?`}
                 Add
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* SECTION 4: Hands-Free Autonomous Auto-Bid */}
-      {(activeSubTab === 'all' || activeSubTab === 'autobid') && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Bot className="h-5 w-5 text-sky-400" />
-              Autonomous Auto-Bid &amp; Extension Controls
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Configure hands-free automatic submission on Freelancer.com via the Chrome Extension without human intervention.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Hands-Free Toggle */}
-            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-white block">🤖 Hands-Free Auto-Bid</span>
-                <span className="text-[11px] text-slate-400 block mt-0.5">
-                  Autonomously clicks Freelancer.com 'Place Bid' submit button
-                </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer ml-2">
-                <input
-                  type="checkbox"
-                  checked={formData.handsFreeAutoSubmit !== false}
-                  onChange={(e) => setFormData({ ...formData, handsFreeAutoSubmit: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            {/* Auto-Open Qualified */}
-            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-white block">⚡ Auto-Open Qualified Projects</span>
-                <span className="text-[11px] text-slate-400 block mt-0.5">
-                  Automatically launches qualified projects in background tabs for instant bidding
-                </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer ml-2">
-                <input
-                  type="checkbox"
-                  checked={formData.autoOpenQualified === true}
-                  onChange={(e) => setFormData({ ...formData, autoOpenQualified: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
-              </label>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-            {/* Auto-Submit Delay */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Auto-Submit Review Delay
-              </label>
-              <select
-                value={formData.autoSubmitDelaySeconds ?? 2}
-                onChange={(e) => setFormData({ ...formData, autoSubmitDelaySeconds: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              >
-                <option value={0}>Instant (0s delay)</option>
-                <option value={2}>2s Countdown Delay</option>
-                <option value={3}>3s Countdown Delay</option>
-                <option value={5}>5s Countdown Delay</option>
-              </select>
-            </div>
-
-            {/* Dry-Run Mode */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Bidding Mode
-              </label>
-              <select
-                value={formData.dryRunMode ? 'dry' : 'live'}
-                onChange={(e) => setFormData({ ...formData, dryRunMode: e.target.value === 'dry' })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              >
-                <option value="live">🔴 Live Bidding (Real Submission)</option>
-                <option value="dry">🟡 Dry-Run (Simulation Only)</option>
-              </select>
-            </div>
-
-            {/* Feed Polling Interval */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Feed Polling Frequency
-              </label>
-              <select
-                value={formData.pollIntervalSeconds || 30}
-                onChange={(e) => setFormData({ ...formData, pollIntervalSeconds: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              >
-                <option value={20}>20 Seconds (High Speed)</option>
-                <option value={30}>30 Seconds (Recommended)</option>
-                <option value={60}>60 Seconds (1 Minute)</option>
-              </select>
-            </div>
           </div>
         </div>
       )}
@@ -1422,11 +1394,14 @@ Are you currently using any caching plugin or CDN on the site?`}
             </form>
           </div>
 
-          {/* Portfolio Links */}
+          {/* Portfolio Links (General fallback — used when no category below matches the project) */}
           <div className="space-y-2 pt-2 border-t border-slate-800">
             <label className="text-xs font-semibold text-slate-300 block">
-              Portfolio &amp; Work Proof Links
+              General Portfolio Links (Fallback)
             </label>
+            <p className="text-[11px] text-slate-500">
+              Used when a project doesn't match any category below. Keep 1-2 strong, general-purpose links here.
+            </p>
             <div className="space-y-1.5">
               {formData.portfolioLinks.map((link) => (
                 <div
@@ -1457,6 +1432,128 @@ Are you currently using any caching plugin or CDN on the site?`}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700"
               >
                 Add Link
+              </button>
+            </form>
+          </div>
+
+          {/* Portfolio Links by Category — e.g. WordPress, Shopify. The proposal prompt picks
+              the best-matching category's links based on the project's skills/title. */}
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block">
+                Portfolio Links by Category
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Group links by project type (WordPress, Shopify, Mobile App, etc). Each category has keywords —
+                when a project's title/skills match a category's keywords, its links are used in the proposal
+                instead of the general fallback above.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {(formData.portfolioCategories || []).map((cat) => (
+                <div key={cat.id} className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-indigo-300">{cat.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCategory(cat.id)}
+                      className="text-slate-400 hover:text-rose-400"
+                      title="Remove category"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Match keywords */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                      Match Keywords (skills/title)
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cat.keywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[11px]"
+                        >
+                          <span>{kw}</span>
+                          <button type="button" onClick={() => handleRemoveCategoryKeyword(cat.id, kw)} className="hover:text-rose-400">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 max-w-xs">
+                      <input
+                        type="text"
+                        value={newCategoryKeywordDraft[cat.id] || ''}
+                        onChange={(e) => setNewCategoryKeywordDraft({ ...newCategoryKeywordDraft, [cat.id]: e.target.value })}
+                        placeholder="e.g. WooCommerce"
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 placeholder-slate-600 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCategoryKeyword(cat.id)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium border border-slate-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Links */}
+                  <div className="space-y-1 pt-1 border-t border-slate-800/80">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                      Links ({cat.links.length})
+                    </span>
+                    <div className="space-y-1">
+                      {cat.links.map((link) => (
+                        <div
+                          key={link}
+                          className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300"
+                        >
+                          <span className="truncate">{link}</span>
+                          <button type="button" onClick={() => handleRemoveCategoryLink(cat.id, link)} className="text-slate-400 hover:text-rose-400 shrink-0">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 max-w-md">
+                      <input
+                        type="url"
+                        value={newCategoryLinkDraft[cat.id] || ''}
+                        onChange={(e) => setNewCategoryLinkDraft({ ...newCategoryLinkDraft, [cat.id]: e.target.value })}
+                        placeholder="https://example.com/wordpress-project"
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 placeholder-slate-600 focus:outline-none font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCategoryLink(cat.id)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium border border-slate-700"
+                      >
+                        Add Link
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleAddCategory} className="flex gap-2 max-w-sm pt-1">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="New category (e.g. Shopify)"
+                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Category</span>
               </button>
             </form>
           </div>
