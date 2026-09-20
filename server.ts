@@ -659,9 +659,15 @@ async function startServer() {
     });
   }
 
-  const admin = users.ensureAdminFromEnv();
-  const firstAdmin = admin || users.listUsers().find((u) => u.role === 'admin');
-  if (firstAdmin) projectStore.importLegacyStore(firstAdmin.id);
+  // Never let bootstrap fail the whole process: a bad env var here should degrade to
+  // "no admin created yet" (visible on /api/auth/me), not an unrecoverable crash loop.
+  try {
+    const admin = users.ensureAdminFromEnv();
+    const firstAdmin = admin || users.listUsers().find((u) => u.role === 'admin');
+    if (firstAdmin) projectStore.importLegacyStore(firstAdmin.id);
+  } catch (err) {
+    console.error('[Boot] Admin bootstrap / legacy import failed, continuing without it:', err);
+  }
 
   startBackgroundPoller(Number(process.env.POLL_INTERVAL_SECONDS) || 30);
 

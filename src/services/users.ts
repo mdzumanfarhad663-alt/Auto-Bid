@@ -291,7 +291,12 @@ export function ensureAdminFromEnv(): UserRow | null {
     console.warn('[Users] No admin account exists and ADMIN_PASSWORD is not set. Set ADMIN_PASSWORD (and optionally ADMIN_EMAIL) to create one.');
     return null;
   }
-  const email = normEmail(process.env.ADMIN_EMAIL || 'admin@local');
+  let email = normEmail(process.env.ADMIN_EMAIL || 'admin@example.com');
+  if (!isValidEmail(email)) {
+    // A malformed ADMIN_EMAIL must never take the whole server down on boot.
+    console.warn(`[Users] ADMIN_EMAIL "${email}" is not a valid email address. Falling back to admin@example.com.`);
+    email = 'admin@example.com';
+  }
   const existing = findByEmail(email);
   if (existing) return setRole(existing.id, 'admin');
   const admin = createUser({ email, password: password.length >= 10 ? password : password.padEnd(10, '0'), name: 'Administrator', role: 'admin' });
