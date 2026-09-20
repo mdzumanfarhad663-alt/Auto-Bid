@@ -10,7 +10,8 @@ import {
   Square,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  LogOut
 } from 'lucide-react';
 import { FilterConfig } from '../../types.ts';
 
@@ -199,6 +200,14 @@ export const UtilityHeader: React.FC<UtilityHeaderProps> = ({
           <span className="hidden xl:inline text-xs font-semibold text-slate-800">
             {userName}
           </span>
+          <button
+            type="button"
+            title="Sign out"
+            onClick={() => fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.reload())}
+            className="ml-1 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </header>
